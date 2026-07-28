@@ -7,6 +7,7 @@ This repository contains a modern web-based Gym Management System for the Indian
 The system is primarily used by:
 
 - Gym owners
+- Receptionists
 - Trainers
 
 The application manages:
