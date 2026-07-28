@@ -1,0 +1,37 @@
+export const MEMBER_STATUS = {
+  ALL: 'ALL',
+  ACTIVE: 'ACTIVE',
+  EXPIRING_SOON: 'EXPIRING SOON',
+  EXPIRED: 'EXPIRED',
+  INACTIVE: 'INACTIVE'
+};
+
+export const MEMBERSHIP_STATUS = {
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
+  FROZEN: 'FROZEN'
+};
+
+export const PAYMENT_STATUS = {
+  PAID: 'PAID',
+  PARTIAL: 'PARTIAL',
+  PENDING: 'PENDING',
+  REFUNDED: 'REFUNDED'
+};
+
+export const PAYMENT_METHOD = {
+  CASH: 'CASH',
+  UPI: 'UPI',
+  CARD: 'CARD',
+  BANK_TRANSFER: 'BANK_TRANSFER'
+};
+
+export const ATTENDANCE_SOURCE = {
+  FINGERPRINT: 'FINGERPRINT',
+  MANUAL: 'MANUAL'
+};
+
+export const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
+
+export const DURATION_UNITS = ['Days', 'Months', 'Years'];
