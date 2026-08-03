@@ -1,14 +1,32 @@
 <script setup>
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import { useToast } from 'primevue/usetoast';
 
 import { useUiStore } from '../stores/uiStore';
+import { useAuthStore } from '../stores/authStore';
+import { useGymStore } from '../stores/gymStore';
 
 const route = useRoute();
+const router = useRouter();
+const toast = useToast();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
+const gymStore = useGymStore();
 
 const { isSidebarCollapsed, isMobileSidebarOpen } = storeToRefs(uiStore);
+const { userProfile } = storeToRefs(authStore);
+
+onMounted(async () => {
+  if (authStore.gymId && !gymStore.dataLoaded) {
+    try {
+      await gymStore.loadData();
+    } catch (err) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load gym data.', life: 4000 });
+    }
+  }
+});
 
 const menuGroups = [
   {
@@ -47,8 +65,48 @@ const currentDate = computed(() => {
   }).format(new Date());
 });
 
+const userInitials = computed(() => {
+  if (!userProfile.value) return 'U';
+  const names = userProfile.value.name?.split(' ') || [];
+  if (names.length >= 2) {
+    return (names[0][0] + names[1][0]).toUpperCase();
+  }
+  return userProfile.value.name?.substring(0, 2).toUpperCase() || 'U';
+});
+
+const userRole = computed(() => {
+  const role = userProfile.value?.role;
+  const roleMap = {
+    'OWNER': 'Owner',
+    'MANAGER': 'Manager',
+    'RECEPTIONIST': 'Receptionist',
+    'TRAINER': 'Trainer'
+  };
+  return roleMap[role] || role || 'User';
+});
+
 function isRouteActive(targetPath) {
   return route.path === targetPath;
+}
+
+async function handleLogout() {
+  try {
+    await authStore.logout();
+    toast.add({
+      severity: 'info',
+      summary: 'Logged Out',
+      detail: 'You have been successfully logged out.',
+      life: 3000
+    });
+    router.push({ name: 'login' });
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Logout Failed',
+      detail: error.message,
+      life: 4000
+    });
+  }
 }
 </script>
 
@@ -74,7 +132,7 @@ function isRouteActive(targetPath) {
         </div>
         <div v-if="!isSidebarCollapsed" class="app-sidebar__brand-copy">
           <h1>GymPulse</h1>
-          <p>Downtown Fitness</p>
+          <p>{{ userProfile?.gymName || 'My Gym' }}</p>
         </div>
       </div>
 
@@ -105,13 +163,18 @@ function isRouteActive(targetPath) {
 
       <div class="app-sidebar__footer">
         <div class="user-chip">
-          <div class="user-chip__avatar">SP</div>
+          <div class="user-chip__avatar">{{ userInitials }}</div>
           <div v-if="!isSidebarCollapsed">
-            <p class="user-chip__name">Sneha Patil</p>
-            <p class="user-chip__role">Owner</p>
+            <p class="user-chip__name">{{ userProfile?.name || 'User' }}</p>
+            <p class="user-chip__role">{{ userRole }}</p>
           </div>
         </div>
-        <button type="button" class="logout-btn" :aria-label="isSidebarCollapsed ? 'Logout' : ''">
+        <button
+          type="button"
+          class="logout-btn"
+          :aria-label="isSidebarCollapsed ? 'Logout' : ''"
+          @click="handleLogout"
+        >
           <i class="pi pi-sign-out" />
           <span v-if="!isSidebarCollapsed">Logout</span>
         </button>

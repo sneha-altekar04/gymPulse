@@ -1,15 +1,19 @@
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
+import { useToast } from 'primevue/usetoast';
 
 import { GENDER_OPTIONS, PAYMENT_METHOD } from '../../constants/domain';
 import FormSection from '../common/FormSection.vue';
 import { formatCurrency, toInputDate } from '../../utils/formatters';
+
+const toast = useToast();
+const formRef = ref(null);
 
 const props = defineProps({
   modelValue: {
@@ -91,16 +95,14 @@ function validate() {
     errors.mobile = 'Enter a valid 10-digit mobile number.';
   }
 
-  if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+  if (!form.email || !form.email.trim()) {
+    errors.email = 'Email is required.';
+  } else if (!/^\S+@\S+\.\S+$/.test(form.email)) {
     errors.email = 'Enter a valid email address.';
   }
 
   if (!form.joiningDate) {
     errors.joiningDate = 'Joining date is required.';
-  }
-
-  if (!form.trainerId) {
-    errors.trainerId = 'Trainer is required.';
   }
 
   if (!isEditMode.value) {
@@ -126,6 +128,14 @@ function validate() {
 
 function submitForm() {
   if (!validate()) {
+    const messages = Object.values(errors);
+    toast.add({
+      severity: 'error',
+      summary: 'Please fix the following',
+      detail: messages.join(' \u2022 '),
+      life: 5000
+    });
+    formRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
@@ -138,30 +148,22 @@ function submitForm() {
 </script>
 
 <template>
-  <form class="stack-16" @submit.prevent="submitForm">
+  <form ref="formRef" class="stack-16" @submit.prevent="submitForm">
     <FormSection title="Personal Information" subtitle="Basic member profile and emergency contacts.">
       <div class="app-form-grid app-form-grid--three">
-        <label class="app-field">
-          <span>Profile Photo</span>
-          <InputText placeholder="Photo URL (optional for mock)" />
-        </label>
-
         <label class="app-field app-field--required">
           <span>Full Name</span>
           <InputText v-model="form.fullName" :invalid="!!errors.fullName" />
-          <small v-if="errors.fullName" class="app-error">{{ errors.fullName }}</small>
         </label>
 
         <label class="app-field app-field--required">
           <span>Mobile Number</span>
           <InputText v-model="form.mobile" :invalid="!!errors.mobile" maxlength="10" />
-          <small v-if="errors.mobile" class="app-error">{{ errors.mobile }}</small>
         </label>
 
-        <label class="app-field">
+        <label class="app-field app-field--required">
           <span>Email</span>
           <InputText v-model="form.email" :invalid="!!errors.email" />
-          <small v-if="errors.email" class="app-error">{{ errors.email }}</small>
         </label>
 
         <label class="app-field">
@@ -193,10 +195,9 @@ function submitForm() {
 
     <FormSection title="Gym Information" subtitle="Membership assignment and trainer mapping.">
       <div class="app-form-grid app-form-grid--three">
-        <label class="app-field app-field--required">
+        <label class="app-field">
           <span>Joining Date</span>
           <Calendar v-model="form.joiningDate" date-format="yy-mm-dd" show-icon manual-input :invalid="!!errors.joiningDate" />
-          <small v-if="errors.joiningDate" class="app-error">{{ errors.joiningDate }}</small>
         </label>
 
         <label v-if="!isEditMode" class="app-field app-field--required">
@@ -209,20 +210,17 @@ function submitForm() {
             :invalid="!!errors.planId"
             placeholder="Select plan"
           />
-          <small v-if="errors.planId" class="app-error">{{ errors.planId }}</small>
         </label>
 
-        <label class="app-field app-field--required">
+        <label class="app-field">
           <span>Trainer</span>
           <Dropdown
             v-model="form.trainerId"
             option-label="fullName"
             option-value="id"
             :options="trainers"
-            :invalid="!!errors.trainerId"
             placeholder="Select trainer"
           />
-          <small v-if="errors.trainerId" class="app-error">{{ errors.trainerId }}</small>
         </label>
 
         <label class="app-field app-field--full">
@@ -253,8 +251,7 @@ function submitForm() {
 
         <label class="app-field">
           <span>Discount</span>
-          <InputNumber v-model="form.discount" :min="0" mode="currency" currency="INR" locale="en-IN" />
-          <small v-if="errors.discount" class="app-error">{{ errors.discount }}</small>
+          <InputNumber v-model="form.discount" :min="0" :invalid="!!errors.discount" mode="currency" currency="INR" locale="en-IN" />
         </label>
 
         <label class="app-field">
@@ -264,8 +261,7 @@ function submitForm() {
 
         <label class="app-field">
           <span>Amount Paid</span>
-          <InputNumber v-model="form.amountPaid" :min="0" mode="currency" currency="INR" locale="en-IN" />
-          <small v-if="errors.amountPaid" class="app-error">{{ errors.amountPaid }}</small>
+          <InputNumber v-model="form.amountPaid" :min="0" :invalid="!!errors.amountPaid" mode="currency" currency="INR" locale="en-IN" />
         </label>
 
         <label class="app-field">
@@ -276,8 +272,8 @@ function submitForm() {
             option-label="label"
             option-value="value"
             placeholder="Select mode"
+            :invalid="!!errors.paymentMode"
           />
-          <small v-if="errors.paymentMode" class="app-error">{{ errors.paymentMode }}</small>
         </label>
 
         <div class="app-field">

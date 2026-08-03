@@ -1,14 +1,24 @@
 <script setup>
 import { computed, reactive, watch } from 'vue';
 import Button from 'primevue/button';
-import Calendar from 'primevue/calendar';
 import Checkbox from 'primevue/checkbox';
 import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/dropdown';
+import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 
 import StatusBadge from '../common/StatusBadge.vue';
-import { formatDate, toInputDateTime } from '../../utils/formatters';
+import { formatDate, toInputDate } from '../../utils/formatters';
+
+function currentTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function combineDateTime(date, time) {
+  if (!date || !time) return '';
+  return `${date}T${time}`;
+}
 
 const props = defineProps({
   visible: {
@@ -25,7 +35,9 @@ const emit = defineEmits(['update:visible', 'submit']);
 
 const form = reactive({
   memberId: '',
-  checkInTime: toInputDateTime(),
+  checkInDate: toInputDate(),
+  checkInTime: currentTime(),
+  checkOutDate: '',
   checkOutTime: '',
   note: '',
   confirmExpired: false
@@ -36,7 +48,9 @@ watch(
   (value) => {
     if (value) {
       form.memberId = '';
-      form.checkInTime = toInputDateTime();
+      form.checkInDate = toInputDate();
+      form.checkInTime = currentTime();
+      form.checkOutDate = '';
       form.checkOutTime = '';
       form.note = '';
       form.confirmExpired = false;
@@ -54,7 +68,7 @@ const memberOptions = computed(() =>
 const selectedMember = computed(() => props.members.find((item) => item.id === form.memberId) || null);
 const isExpired = computed(() => selectedMember.value?.membershipStatus === 'EXPIRED');
 const canSubmit = computed(() => {
-  if (!selectedMember.value || !form.checkInTime) {
+  if (!selectedMember.value || !form.checkInDate || !form.checkInTime) {
     return false;
   }
 
@@ -74,10 +88,14 @@ function submit() {
     return;
   }
 
+  const checkOut = form.checkOutDate && form.checkOutTime
+    ? combineDateTime(form.checkOutDate, form.checkOutTime)
+    : null;
+
   emit('submit', {
     memberId: form.memberId,
-    checkInTime: form.checkInTime,
-    checkOutTime: form.checkOutTime || null,
+    checkInTime: combineDateTime(form.checkInDate, form.checkInTime),
+    checkOutTime: checkOut,
     note: form.note,
     membershipStatus: selectedMember.value.membershipStatus
   });
@@ -97,7 +115,7 @@ function submit() {
     <div class="stack-16">
       <label class="app-field">
         <span>Select Member</span>
-        <Dropdown v-model="form.memberId" :options="memberOptions" filter placeholder="Search member" />
+        <Dropdown v-model="form.memberId" :options="memberOptions" optionLabel="label" optionValue="value" filter placeholder="Search member" />
       </label>
 
       <div v-if="selectedMember" class="summary-bar">
@@ -114,13 +132,23 @@ function submit() {
 
       <div class="app-form-grid app-form-grid--two">
         <label class="app-field">
-          <span>Check-in Date/Time</span>
-          <Calendar v-model="form.checkInTime" show-time hour-format="12" date-format="yy-mm-dd" show-icon />
+          <span>Check-in Date</span>
+          <InputText v-model="form.checkInDate" type="date" />
         </label>
 
         <label class="app-field">
-          <span>Check-out Date/Time (optional)</span>
-          <Calendar v-model="form.checkOutTime" show-time hour-format="12" date-format="yy-mm-dd" show-icon />
+          <span>Check-in Time</span>
+          <InputText v-model="form.checkInTime" type="time" />
+        </label>
+
+        <label class="app-field">
+          <span>Check-out Date (optional)</span>
+          <InputText v-model="form.checkOutDate" type="date" />
+        </label>
+
+        <label class="app-field">
+          <span>Check-out Time (optional)</span>
+          <InputText v-model="form.checkOutTime" type="time" />
         </label>
 
         <label class="app-field app-field--full">

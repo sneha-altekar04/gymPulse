@@ -45,30 +45,38 @@ const initialModel = computed(() => {
 
 async function onSubmit(payload) {
   saving.value = true;
-  await new Promise((resolve) => setTimeout(resolve, 600));
 
-  if (isEditMode.value && member.value) {
-    gymStore.updateMember(member.value.id, payload);
+  try {
+    if (isEditMode.value && member.value) {
+      await gymStore.updateMember(member.value.id, payload);
+      toast.add({
+        severity: 'success',
+        summary: 'Member updated',
+        detail: 'Member profile details were updated successfully.',
+        life: 2600
+      });
+      router.push(`/members/${member.value.id}`);
+      return;
+    }
+
+    await gymStore.addMember(payload);
     toast.add({
       severity: 'success',
-      summary: 'Member updated',
-      detail: 'Member profile details were updated successfully.',
+      summary: 'Member added',
+      detail: 'New member has been registered successfully.',
       life: 2600
     });
+    router.push('/members');
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: err.message || 'Failed to save member.',
+      life: 4000
+    });
+  } finally {
     saving.value = false;
-    router.push(`/members/${member.value.id}`);
-    return;
   }
-
-  const memberId = gymStore.addMember(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Member added',
-    detail: 'New member has been registered successfully.',
-    life: 2600
-  });
-  saving.value = false;
-  router.push(`/members/${memberId}`);
 }
 
 function onCancel() {

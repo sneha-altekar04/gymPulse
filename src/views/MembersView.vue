@@ -6,6 +6,7 @@ import Dropdown from 'primevue/dropdown';
 import InputText from 'primevue/inputtext';
 import Menu from 'primevue/menu';
 import Paginator from 'primevue/paginator';
+import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 
 import EmptyState from '../components/common/EmptyState.vue';
@@ -21,6 +22,7 @@ import { formatDate } from '../utils/formatters';
 const router = useRouter();
 const route = useRoute();
 const toast = useToast();
+const confirm = useConfirm();
 const gymStore = useGymStore();
 
 const searchText = ref('');
@@ -87,6 +89,43 @@ const actionItems = computed(() => [
       if (activeMember.value) {
         paymentVisible.value = true;
       }
+    }
+  },
+  { separator: true },
+  {
+    label: 'Deactivate Member',
+    icon: 'pi pi-ban',
+    command: () => {
+      if (!activeMember.value) return;
+      const member = activeMember.value;
+      confirm.require({
+        message: `Are you sure you want to deactivate ${member.fullName}?`,
+        header: 'Deactivate Member',
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-warning',
+        accept: async () => {
+          await gymStore.deactivateMember(member.id);
+          toast.add({ severity: 'info', summary: 'Member deactivated', detail: `${member.fullName} has been deactivated.`, life: 3000 });
+        }
+      });
+    }
+  },
+  {
+    label: 'Delete Member',
+    icon: 'pi pi-trash',
+    command: () => {
+      if (!activeMember.value) return;
+      const member = activeMember.value;
+      confirm.require({
+        message: `Are you sure you want to delete ${member.fullName}? This action cannot be undone.`,
+        header: 'Delete Member',
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
+        accept: async () => {
+          await gymStore.deleteMember(member.id);
+          toast.add({ severity: 'warn', summary: 'Member deleted', detail: `${member.fullName} has been removed.`, life: 3000 });
+        }
+      });
     }
   }
 ]);

@@ -1,16 +1,27 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
+import { useAuthStore } from './authStore';
+import { queryDocuments, addDocument, updateDocument } from '../firebase/firestore';
 import { ATTENDANCE_SOURCE, MEMBER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS } from '../constants/domain';
-import { attendanceSeed } from '../services/mockData/attendance';
-import { membersSeed } from '../services/mockData/members';
-import { membershipPlansSeed } from '../services/mockData/membershipPlans';
-import { membershipsSeed } from '../services/mockData/memberships';
-import { paymentsSeed } from '../services/mockData/payments';
-import { trainersSeed } from '../services/mockData/trainers';
 
-function deepClone(data) {
-  return JSON.parse(JSON.stringify(data));
+function normalizeTimestamp(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value.toDate) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function normalizeDoc(doc) {
+  const result = { ...doc };
+  for (const key of Object.keys(result)) {
+    const val = result[key];
+    if (val && typeof val === 'object' && typeof val.toDate === 'function') {
+      result[key] = val.toDate().toISOString();
+    }
+  }
+  return result;
 }
 
 function normalizeDate(dateValue) {
@@ -47,13 +58,51 @@ function toIsoDate(dateValue) {
 }
 
 export const useGymStore = defineStore('gym', () => {
-  const members = ref(deepClone(membersSeed));
-  const trainers = ref(deepClone(trainersSeed));
-  const membershipPlans = ref(deepClone(membershipPlansSeed));
-  const memberships = ref(deepClone(membershipsSeed));
-  const attendance = ref(deepClone(attendanceSeed));
-  const payments = ref(deepClone(paymentsSeed));
-  const receiptCounter = ref(124);
+  const authStore = useAuthStore();
+
+  const members = ref([]);
+  const trainers = ref([]);
+  const membershipPlans = ref([]);
+  const memberships = ref([]);
+  const attendance = ref([]);
+  const payments = ref([]);
+  const loading = ref(false);
+  const dataLoaded = ref(false);
+
+  function getGymId() {
+    return authStore.gymId;
+  }
+
+  async function loadData() {
+    const gymId = getGymId();
+    if (!gymId) return;
+
+    loading.value = true;
+    try {
+      const [membersData, trainersData, plansData, membershipsData, attendanceData, paymentsData] =
+        await Promise.all([
+          queryDocuments(`gyms/${gymId}/members`, []),
+          queryDocuments(`gyms/${gymId}/trainers`, []),
+          queryDocuments(`gyms/${gymId}/membershipPlans`, []),
+          queryDocuments(`gyms/${gymId}/memberships`, []),
+          queryDocuments(`gyms/${gymId}/attendance`, []),
+          queryDocuments(`gyms/${gymId}/payments`, [])
+        ]);
+
+      members.value = membersData.map(normalizeDoc);
+      trainers.value = trainersData.map(normalizeDoc);
+      membershipPlans.value = plansData.map(normalizeDoc);
+      memberships.value = membershipsData.map(normalizeDoc);
+      attendance.value = attendanceData.map(normalizeDoc);
+      payments.value = paymentsData.map(normalizeDoc);
+      dataLoaded.value = true;
+    } catch (err) {
+      console.error('Failed to load gym data:', err);
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
 
   const trainersById = computed(() => {
     return Object.fromEntries(trainers.value.map((trainer) => [trainer.id, trainer]));
@@ -100,7 +149,7 @@ export const useGymStore = defineStore('gym', () => {
       const membershipPlan = latestMembership ? plansById.value[latestMembership.planId] : null;
       const status = getMembershipStatusFromRecord(latestMembership, member.status);
       const outstandingBalance = latestMembership
-        ? Math.max(latestMembership.finalAmount - latestMembership.amountPaid, 0)
+        ? Math.max((latestMembership.finalAmount || 0) - (latestMembership.amountPaid || 0), 0)
         : 0;
 
       const memberAttendance = attendance.value
@@ -232,39 +281,34 @@ export const useGymStore = defineStore('gym', () => {
     return paymentsDetailed.value.filter((entry) => entry.memberId === memberId);
   }
 
-  function generateId(prefix) {
-    return `${prefix}-${Date.now()}`;
-  }
-
   function generateMemberCode() {
-    return `MBR-2026-${String(members.value.length + 1).padStart(3, '0')}`;
+    return `MBR-${new Date().getFullYear()}-${String(members.value.length + 1).padStart(3, '0')}`;
   }
 
   function generateReceiptNumber() {
-    const serial = String(receiptCounter.value).padStart(6, '0');
-    receiptCounter.value += 1;
-    return `GYM-2026-${serial}`;
+    const maxSeq = payments.value.reduce((max, p) => {
+      if (!p.receiptNumber) return max;
+      const parts = p.receiptNumber.split('-');
+      const num = parseInt(parts[parts.length - 1], 10);
+      return num > max ? num : max;
+    }, 0);
+    const serial = String(maxSeq + 1).padStart(6, '0');
+    return `GYM-${new Date().getFullYear()}-${serial}`;
   }
 
   function getStatusFromAmounts(finalAmount, paidAmount) {
-    if (paidAmount >= finalAmount) {
-      return PAYMENT_STATUS.PAID;
-    }
-
-    if (paidAmount > 0) {
-      return PAYMENT_STATUS.PARTIAL;
-    }
-
+    if (paidAmount >= finalAmount) return PAYMENT_STATUS.PAID;
+    if (paidAmount > 0) return PAYMENT_STATUS.PARTIAL;
     return PAYMENT_STATUS.PENDING;
   }
 
-  function addMember(payload) {
-    const memberId = generateId('member');
+  async function addMember(payload) {
+    const gymId = getGymId();
     const now = new Date().toISOString();
+    const memberCode = generateMemberCode();
 
-    const member = {
-      id: memberId,
-      memberCode: generateMemberCode(),
+    const memberData = {
+      memberCode,
       fullName: payload.fullName,
       mobile: payload.mobile,
       email: payload.email,
@@ -279,7 +323,8 @@ export const useGymStore = defineStore('gym', () => {
       status: MEMBER_STATUS.ACTIVE
     };
 
-    members.value.unshift(member);
+    const memberId = await addDocument(`gyms/${gymId}/members`, memberData);
+    members.value.unshift({ id: memberId, ...memberData, createdAt: now, updatedAt: now });
 
     const plan = plansById.value[payload.planId];
     const discount = Number(payload.discount || 0);
@@ -287,9 +332,7 @@ export const useGymStore = defineStore('gym', () => {
     const paidAmount = Number(payload.amountPaid || 0);
     const endDate = addDuration(payload.joiningDate, plan.duration - 1, plan.durationUnit);
 
-    const membershipId = generateId('ms');
-    memberships.value.unshift({
-      id: membershipId,
+    const msData = {
       memberId,
       planId: payload.planId,
       startDate: payload.joiningDate,
@@ -298,37 +341,34 @@ export const useGymStore = defineStore('gym', () => {
       discount,
       finalAmount,
       amountPaid: paidAmount,
-      status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE',
-      createdAt: now,
-      updatedAt: now
-    });
+      status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE'
+    };
+
+    const membershipId = await addDocument(`gyms/${gymId}/memberships`, msData);
+    memberships.value.unshift({ id: membershipId, ...msData, createdAt: now, updatedAt: now });
 
     if (paidAmount > 0) {
-      payments.value.unshift({
-        id: generateId('pay'),
-        receiptNumber: generateReceiptNumber(),
+      const receiptNumber = generateReceiptNumber();
+      const payData = {
         memberId,
         membershipId,
+        receiptNumber,
         amount: paidAmount,
         paymentMode: payload.paymentMode || PAYMENT_METHOD.CASH,
         status: getStatusFromAmounts(finalAmount, paidAmount),
         paymentDate: payload.joiningDate,
         notes: 'Initial payment at registration'
-      });
+      };
+      const payId = await addDocument(`gyms/${gymId}/payments`, payData);
+      payments.value.unshift({ id: payId, ...payData, createdAt: now });
     }
 
     return memberId;
   }
 
-  function updateMember(memberId, payload) {
-    const index = members.value.findIndex((member) => member.id === memberId);
-
-    if (index === -1) {
-      return false;
-    }
-
-    members.value[index] = {
-      ...members.value[index],
+  async function updateMember(memberId, payload) {
+    const gymId = getGymId();
+    const updateData = {
       fullName: payload.fullName,
       mobile: payload.mobile,
       email: payload.email,
@@ -342,21 +382,26 @@ export const useGymStore = defineStore('gym', () => {
       deviceUserId: payload.deviceUserId
     };
 
+    await updateDocument(`gyms/${gymId}/members`, memberId, updateData);
+
+    const index = members.value.findIndex((m) => m.id === memberId);
+    if (index !== -1) {
+      members.value[index] = { ...members.value[index], ...updateData };
+    }
     return true;
   }
 
-  function renewMembership(payload) {
+  async function renewMembership(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
     const plan = plansById.value[payload.planId];
     const discount = Number(payload.discount || 0);
     const finalAmount = Math.max(plan.price - discount, 0);
     const paidAmount = Number(payload.amountPaid || 0);
     const startDate = payload.startDate;
     const endDate = addDuration(startDate, plan.duration - 1, plan.durationUnit);
-    const now = new Date().toISOString();
-    const membershipId = generateId('ms');
 
-    memberships.value.unshift({
-      id: membershipId,
+    const msData = {
       memberId: payload.memberId,
       planId: payload.planId,
       startDate,
@@ -365,88 +410,80 @@ export const useGymStore = defineStore('gym', () => {
       discount,
       finalAmount,
       amountPaid: paidAmount,
-      status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE',
-      createdAt: now,
-      updatedAt: now
-    });
+      status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE'
+    };
+
+    const membershipId = await addDocument(`gyms/${gymId}/memberships`, msData);
+    memberships.value.unshift({ id: membershipId, ...msData, createdAt: now, updatedAt: now });
 
     if (paidAmount > 0) {
-      payments.value.unshift({
-        id: generateId('pay'),
-        receiptNumber: generateReceiptNumber(),
+      const receiptNumber = generateReceiptNumber();
+      const payData = {
         memberId: payload.memberId,
         membershipId,
+        receiptNumber,
         amount: paidAmount,
         paymentMode: payload.paymentMode || PAYMENT_METHOD.CASH,
         status: getStatusFromAmounts(finalAmount, paidAmount),
         paymentDate: payload.startDate,
         notes: 'Membership renewal payment'
-      });
+      };
+      const payId = await addDocument(`gyms/${gymId}/payments`, payData);
+      payments.value.unshift({ id: payId, ...payData, createdAt: now });
     }
 
     return membershipId;
   }
 
-  function recordPayment(payload) {
-    const membership = memberships.value.find((record) => record.id === payload.membershipId);
+  async function recordPayment(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
+    const membership = memberships.value.find((r) => r.id === payload.membershipId);
+    if (!membership) return null;
 
-    if (!membership) {
-      return null;
-    }
+    const newAmountPaid = (membership.amountPaid || 0) + Number(payload.amount);
+    await updateDocument(`gyms/${gymId}/memberships`, payload.membershipId, {
+      amountPaid: newAmountPaid
+    });
+    membership.amountPaid = newAmountPaid;
+    membership.updatedAt = now;
 
-    membership.amountPaid += Number(payload.amount);
-    membership.updatedAt = new Date().toISOString();
-
-    const paymentRecord = {
-      id: generateId('pay'),
-      receiptNumber: generateReceiptNumber(),
+    const receiptNumber = generateReceiptNumber();
+    const payData = {
       memberId: payload.memberId,
       membershipId: payload.membershipId,
+      receiptNumber,
       amount: Number(payload.amount),
       paymentMode: payload.paymentMode,
-      status: getStatusFromAmounts(membership.finalAmount, membership.amountPaid),
+      status: getStatusFromAmounts(membership.finalAmount, newAmountPaid),
       paymentDate: payload.paymentDate,
       notes: payload.notes || ''
     };
-
+    const payId = await addDocument(`gyms/${gymId}/payments`, payData);
+    const paymentRecord = { id: payId, ...payData, createdAt: now };
     payments.value.unshift(paymentRecord);
     return paymentRecord;
   }
 
-  function addManualAttendance(payload) {
-    attendance.value.unshift({
-      id: generateId('att'),
+  async function addManualAttendance(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
+    const attData = {
       memberId: payload.memberId,
       checkInTime: payload.checkInTime,
       checkOutTime: payload.checkOutTime || null,
       source: ATTENDANCE_SOURCE.MANUAL,
       note: payload.note || '',
-      membershipStatus: payload.membershipStatus,
-      createdAt: new Date().toISOString()
-    });
+      membershipStatus: payload.membershipStatus
+    };
+    const attId = await addDocument(`gyms/${gymId}/attendance`, attData);
+    attendance.value.unshift({ id: attId, ...attData, createdAt: now });
   }
 
-  function createPlan(payload) {
-    membershipPlans.value.unshift({
-      id: generateId('plan'),
-      name: payload.name,
-      price: Number(payload.price),
-      duration: Number(payload.duration),
-      durationUnit: payload.durationUnit,
-      description: payload.description,
-      active: payload.active
-    });
-  }
-
-  function updatePlan(planId, payload) {
-    const index = membershipPlans.value.findIndex((plan) => plan.id === planId);
-
-    if (index === -1) {
-      return false;
-    }
-
-    membershipPlans.value[index] = {
-      ...membershipPlans.value[index],
+  async function createPlan(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
+    const planData = {
       name: payload.name,
       price: Number(payload.price),
       duration: Number(payload.duration),
@@ -454,40 +491,43 @@ export const useGymStore = defineStore('gym', () => {
       description: payload.description,
       active: payload.active
     };
+    const planId = await addDocument(`gyms/${gymId}/membershipPlans`, planData);
+    membershipPlans.value.unshift({ id: planId, ...planData, createdAt: now });
+  }
 
+  async function updatePlan(planId, payload) {
+    const gymId = getGymId();
+    const updateData = {
+      name: payload.name,
+      price: Number(payload.price),
+      duration: Number(payload.duration),
+      durationUnit: payload.durationUnit,
+      description: payload.description,
+      active: payload.active
+    };
+    await updateDocument(`gyms/${gymId}/membershipPlans`, planId, updateData);
+
+    const index = membershipPlans.value.findIndex((p) => p.id === planId);
+    if (index !== -1) {
+      membershipPlans.value[index] = { ...membershipPlans.value[index], ...updateData };
+    }
     return true;
   }
 
-  function togglePlanActive(planId) {
-    const target = membershipPlans.value.find((plan) => plan.id === planId);
-
+  async function togglePlanActive(planId) {
+    const gymId = getGymId();
+    const target = membershipPlans.value.find((p) => p.id === planId);
     if (target) {
-      target.active = !target.active;
+      const newActive = !target.active;
+      await updateDocument(`gyms/${gymId}/membershipPlans`, planId, { active: newActive });
+      target.active = newActive;
     }
   }
 
-  function createTrainer(payload) {
-    trainers.value.unshift({
-      id: generateId('trainer'),
-      fullName: payload.fullName,
-      mobile: payload.mobile,
-      email: payload.email,
-      gender: payload.gender,
-      specialization: payload.specialization,
-      joiningDate: payload.joiningDate,
-      status: payload.status
-    });
-  }
-
-  function updateTrainer(trainerId, payload) {
-    const index = trainers.value.findIndex((trainer) => trainer.id === trainerId);
-
-    if (index === -1) {
-      return false;
-    }
-
-    trainers.value[index] = {
-      ...trainers.value[index],
+  async function createTrainer(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
+    const trainerData = {
       fullName: payload.fullName,
       mobile: payload.mobile,
       email: payload.email,
@@ -496,15 +536,53 @@ export const useGymStore = defineStore('gym', () => {
       joiningDate: payload.joiningDate,
       status: payload.status
     };
+    const trainerId = await addDocument(`gyms/${gymId}/trainers`, trainerData);
+    trainers.value.unshift({ id: trainerId, ...trainerData, createdAt: now });
+  }
 
+  async function updateTrainer(trainerId, payload) {
+    const gymId = getGymId();
+    const updateData = {
+      fullName: payload.fullName,
+      mobile: payload.mobile,
+      email: payload.email,
+      gender: payload.gender,
+      specialization: payload.specialization,
+      joiningDate: payload.joiningDate,
+      status: payload.status
+    };
+    await updateDocument(`gyms/${gymId}/trainers`, trainerId, updateData);
+
+    const index = trainers.value.findIndex((t) => t.id === trainerId);
+    if (index !== -1) {
+      trainers.value[index] = { ...trainers.value[index], ...updateData };
+    }
     return true;
   }
 
-  function toggleTrainerStatus(trainerId) {
-    const trainer = trainers.value.find((item) => item.id === trainerId);
+  async function toggleTrainerStatus(trainerId) {
+    const gymId = getGymId();
+    const trainer = trainers.value.find((t) => t.id === trainerId);
     if (trainer) {
-      trainer.status = trainer.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+      const newStatus = trainer.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+      await updateDocument(`gyms/${gymId}/trainers`, trainerId, { status: newStatus });
+      trainer.status = newStatus;
     }
+  }
+
+  async function deactivateMember(memberId) {
+    const gymId = getGymId();
+    await updateDocument(`gyms/${gymId}/members`, memberId, { status: 'INACTIVE' });
+    const index = members.value.findIndex((m) => m.id === memberId);
+    if (index !== -1) {
+      members.value[index] = { ...members.value[index], status: 'INACTIVE' };
+    }
+  }
+
+  async function deleteMember(memberId) {
+    const gymId = getGymId();
+    await updateDocument(`gyms/${gymId}/members`, memberId, { status: 'DELETED' });
+    members.value = members.value.filter((m) => m.id !== memberId);
   }
 
   return {
@@ -514,6 +592,9 @@ export const useGymStore = defineStore('gym', () => {
     memberships,
     attendance,
     payments,
+    loading,
+    dataLoaded,
+    loadData,
     membersDetailed,
     membershipsDetailed,
     attendanceDetailed,
@@ -526,6 +607,8 @@ export const useGymStore = defineStore('gym', () => {
     getLatestMembership,
     addMember,
     updateMember,
+    deactivateMember,
+    deleteMember,
     renewMembership,
     recordPayment,
     addManualAttendance,

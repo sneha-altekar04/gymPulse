@@ -1,3 +1,10 @@
+export const USER_ROLE = {
+  OWNER: 'OWNER',
+  MANAGER: 'MANAGER',
+  RECEPTIONIST: 'RECEPTIONIST',
+  TRAINER: 'TRAINER'
+};
+
 export const MEMBER_STATUS = {
   ALL: 'ALL',
   ACTIVE: 'ACTIVE',

@@ -1,0 +1,33 @@
+{
+  "firebase": {
+    "apiKey": "",
+    "authDomain": "",
+    "projectId": "",
+    "storageBucket": "",
+    "messagingSenderId": "",
+    "appId": ""
+  },
+  "device": {
+    "ip": "192.168.1.201",
+    "port": 4370,
+    "protocol": "TCP"
+  },
+  "sync": {
+    "pollingIntervalMs": 30000,
+    "retryIntervalMs": 60000,
+    "maxRetries": 5,
+    "batchSize": 50,
+    "offlineQueueSize": 10000
+  },
+  "app": {
+    "autoStart": false,
+    "autoSync": true,
+    "minimizeToTray": true,
+    "gymId": "demo-gym-001"
+  },
+  "logging": {
+    "level": "info",
+    "maxFileSize": "10m",
+    "maxFiles": 5
+  }
+}

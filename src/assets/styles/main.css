@@ -1123,15 +1123,35 @@ button {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)) auto;
-  gap: 10px;
+  grid-template-columns: 180px 1fr minmax(120px, 160px) minmax(120px, 160px) auto;
+  gap: 12px;
   align-items: center;
 }
 
 .toolbar-grid--open {
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
+}
+
+.p-input-icon-left {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+
+.p-input-icon-left > i {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  transform: translateY(-50%);
+  color: var(--text-subtle, #94a3b8);
+  z-index: 1;
+}
+
+.p-input-icon-left > .p-inputtext {
+  padding-left: 2.25rem;
+  width: 100%;
 }
 
 .w-full {

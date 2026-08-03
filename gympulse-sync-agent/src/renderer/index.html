@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>GymPulse Sync Agent</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="header__title">GymPulse Sync Agent</h1>
+      <div class="header__indicators">
+        <span id="internet-indicator" class="indicator indicator--offline" title="Internet">⬤ Offline</span>
+        <span id="device-indicator" class="indicator indicator--disconnected" title="Device">⬤ No Device</span>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="status-cards">
+        <div class="card card--status">
+          <div class="card__label">Connection</div>
+          <div id="connection-status" class="card__value card__value--warning">Disconnected</div>
+        </div>
+        <div class="card card--status">
+          <div class="card__label">Last Sync</div>
+          <div id="last-sync" class="card__value">--</div>
+        </div>
+        <div class="card card--status">
+          <div class="card__label">Pending Queue</div>
+          <div id="pending-queue" class="card__value">0</div>
+        </div>
+        <div class="card card--status">
+          <div class="card__label">Today's Attendance</div>
+          <div id="today-attendance" class="card__value">0</div>
+        </div>
+        <div class="card card--status">
+          <div class="card__label">Rejected Today</div>
+          <div id="rejected-today" class="card__value card__value--danger">0</div>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="btn-connect" class="btn btn--primary">Connect Device</button>
+        <button id="btn-sync" class="btn btn--accent">Sync Now</button>
+        <button id="btn-settings" class="btn btn--secondary">Settings</button>
+        <button id="btn-export" class="btn btn--secondary">Export Logs</button>
+      </section>
+
+      <section class="logs-section">
+        <h2 class="logs-section__title">Recent Activity</h2>
+        <div id="logs-container" class="logs-list">
+          <p class="logs-list__empty">No activity yet.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal__content">
+        <h2>Settings</h2>
+        <form id="settings-form">
+          <fieldset>
+            <legend>Device</legend>
+            <label>IP Address <input type="text" id="cfg-device-ip" /></label>
+            <label>Port <input type="number" id="cfg-device-port" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Sync</legend>
+            <label>Polling Interval (ms) <input type="number" id="cfg-poll-interval" /></label>
+            <label>Auto Sync <input type="checkbox" id="cfg-auto-sync" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Application</legend>
+            <label>Gym ID <input type="text" id="cfg-gym-id" /></label>
+            <label>Auto Start <input type="checkbox" id="cfg-auto-start" /></label>
+            <label>Minimize to Tray <input type="checkbox" id="cfg-minimize-tray" /></label>
+          </fieldset>
+          <div class="modal__actions">
+            <button type="button" id="btn-cancel-settings" class="btn btn--secondary">Cancel</button>
+            <button type="submit" class="btn btn--primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
