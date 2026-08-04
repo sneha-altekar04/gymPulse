@@ -259,6 +259,27 @@ npm run dev
 #   Password: Demo@123
 ```
 
+## Vercel Deployment Environment Variables (Critical)
+
+If the deployed app shows `FirebaseError: Firebase: Error (auth/invalid-api-key)`, your Vercel env values are missing, quoted incorrectly, or misnamed.
+
+In Vercel Project Settings -> Environment Variables, add these exact keys for Production (and Preview if needed):
+
+```env
+VITE_FIREBASE_API_KEY=AIzaSy...
+VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+VITE_USE_MOCK_DATA=false
+```
+
+Important:
+- Use the `VITE_` prefix exactly.
+- Do not wrap values in quotes.
+- After updating variables, redeploy the app (old deployments keep old env values).
+- If your Firebase Web API key was regenerated, copy the latest key from Firebase Console -> Project Settings -> Your apps -> Web app config.
+
 ## Production Build
 
 When Node 20+ is available:

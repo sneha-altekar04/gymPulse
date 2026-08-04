@@ -10,6 +10,7 @@ export const handleFirebaseError = (error) => {
 
   // Handle Firebase Authentication errors
   const authErrorMap = {
+    'auth/invalid-api-key': 'Firebase API key is invalid. Check VITE_FIREBASE_API_KEY in your environment settings.',
     'auth/user-not-found': 'Email not found. Please check your email or sign up.',
     'auth/wrong-password': 'Incorrect password. Please try again.',
     'auth/invalid-email': 'Invalid email address.',
