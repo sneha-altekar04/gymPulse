@@ -4,6 +4,10 @@ import { computed } from 'vue';
 import { formatCurrency } from '../../utils/formatters';
 
 const props = defineProps({
+  clickable: {
+    type: Boolean,
+    default: false
+  },
   title: {
     type: String,
     required: true
@@ -50,6 +54,12 @@ const props = defineProps({
   }
 });
 
+const emit = defineEmits(['click']);
+
+function activate() {
+  if (props.clickable) emit('click');
+}
+
 const formattedValue = computed(() => {
   if (props.format === 'currency') {
     return formatCurrency(Number(props.value));
@@ -79,7 +89,15 @@ const ringProgress = computed(() => {
 </script>
 
 <template>
-  <article class="stat-card" :class="[`stat-card--${tone}`, `stat-card--${variant}`]">
+  <article
+    class="stat-card"
+    :class="[`stat-card--${tone}`, `stat-card--${variant}`, { 'stat-card--clickable': clickable }]"
+    :role="clickable ? 'button' : undefined"
+    :tabindex="clickable ? 0 : undefined"
+    @click="activate"
+    @keydown.enter="activate"
+    @keydown.space.prevent="activate"
+  >
     <div class="stat-card__icon-wrap">
       <i :class="icon" class="stat-card__icon" aria-hidden="true" />
     </div>

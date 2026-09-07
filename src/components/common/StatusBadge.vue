@@ -19,11 +19,11 @@ const badgeClass = computed(() => {
     return `status-badge status-badge--${props.tone}`;
   }
 
-  if (normalized.value === 'ACTIVE' || normalized.value === 'PAID') {
+  if (normalized.value === 'ACTIVE' || normalized.value === 'PAID' || normalized.value === 'DELIVERED') {
     return 'status-badge status-badge--success';
   }
 
-  if (normalized.value === 'EXPIRING SOON' || normalized.value === 'PENDING') {
+  if (normalized.value === 'EXPIRING SOON' || normalized.value === 'PENDING' || normalized.value === 'QUEUED') {
     return 'status-badge status-badge--warning';
   }
 
@@ -31,11 +31,12 @@ const badgeClass = computed(() => {
     normalized.value === 'EXPIRED' ||
     normalized.value === 'CANCELLED' ||
     normalized.value === 'REFUNDED'
+    || normalized.value === 'FAILED'
   ) {
     return 'status-badge status-badge--danger';
   }
 
-  if (normalized.value === 'PARTIAL') {
+  if (normalized.value === 'PARTIAL' || normalized.value === 'SENT') {
     return 'status-badge status-badge--accent';
   }
 

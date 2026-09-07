@@ -10,8 +10,8 @@ import AttendanceView from '../views/AttendanceView.vue';
 import MembershipsView from '../views/MembershipsView.vue';
 import MembershipPlansView from '../views/MembershipPlansView.vue';
 import PaymentsView from '../views/PaymentsView.vue';
+import MessagesView from '../views/MessagesView.vue';
 import TrainersView from '../views/TrainersView.vue';
-import ReportsView from '../views/ReportsView.vue';
 import SettingsView from '../views/SettingsView.vue';
 import LoginView from '../views/LoginView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
@@ -93,6 +93,12 @@ const routes = [
         meta: { title: 'Payments', requiresAuth: true }
       },
       {
+        path: 'messages',
+        name: 'messages',
+        component: MessagesView,
+        meta: { title: 'Messages', requiresAuth: true }
+      },
+      {
         path: 'trainers',
         name: 'trainers',
         component: TrainersView,
@@ -101,7 +107,7 @@ const routes = [
       {
         path: 'reports',
         name: 'reports',
-        component: ReportsView,
+        component: () => import('../views/ReportsView.vue'),
         meta: { title: 'Reports', requiresAuth: true }
       },
       {
@@ -156,7 +162,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Update page title
-  document.title = to.meta.title ? `${to.meta.title} | GymPulse` : 'GymPulse';
+  document.title = to.meta.title ? `${to.meta.title} | K3 Oxygen` : 'K3 Oxygen';
 
   next();
 });

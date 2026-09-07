@@ -2,8 +2,11 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useAuthStore } from './authStore';
-import { queryDocuments, addDocument, updateDocument } from '../firebase/firestore';
-import { ATTENDANCE_SOURCE, MEMBER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS } from '../constants/domain';
+import { queryDocuments, addDocument, updateDocument, deleteDocument } from '../firebase/firestore';
+import { ATTENDANCE_SOURCE, MEMBER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, PERSONAL_TRAINING_STATUS, PLAN_STATUS } from '../constants/domain';
+import { createPersonalTrainingPlan, setPersonalTrainingPlanStatus, updatePersonalTrainingPlan } from '../services/firebase/personalTrainingPlanService';
+import { createPersonalTrainingSubscription, updatePersonalTrainingSubscription } from '../services/firebase/personalTrainingService';
+import { allocatePayment, calculatePurchaseTotals, calculateSubscriptionEndDate } from '../utils/purchaseCalculations';
 
 function normalizeTimestamp(value) {
   if (!value) return null;
@@ -57,12 +60,23 @@ function toIsoDate(dateValue) {
   return new Date(dateValue).toISOString().slice(0, 10);
 }
 
+async function queryOptionalCollection(path) {
+  try {
+    return await queryDocuments(path, []);
+  } catch (error) {
+    if (error.code === 'permission-denied') return [];
+    throw error;
+  }
+}
+
 export const useGymStore = defineStore('gym', () => {
   const authStore = useAuthStore();
 
   const members = ref([]);
   const trainers = ref([]);
   const membershipPlans = ref([]);
+  const personalTrainingPlans = ref([]);
+  const personalTrainingSubscriptions = ref([]);
   const memberships = ref([]);
   const attendance = ref([]);
   const payments = ref([]);
@@ -79,11 +93,13 @@ export const useGymStore = defineStore('gym', () => {
 
     loading.value = true;
     try {
-      const [membersData, trainersData, plansData, membershipsData, attendanceData, paymentsData] =
+      const [membersData, trainersData, plansData, ptPlansData, ptSubscriptionsData, membershipsData, attendanceData, paymentsData] =
         await Promise.all([
           queryDocuments(`gyms/${gymId}/members`, []),
           queryDocuments(`gyms/${gymId}/trainers`, []),
           queryDocuments(`gyms/${gymId}/membershipPlans`, []),
+          queryOptionalCollection(`gyms/${gymId}/personalTrainingPlans`),
+          queryOptionalCollection(`gyms/${gymId}/personalTrainingSubscriptions`),
           queryDocuments(`gyms/${gymId}/memberships`, []),
           queryDocuments(`gyms/${gymId}/attendance`, []),
           queryDocuments(`gyms/${gymId}/payments`, [])
@@ -92,6 +108,8 @@ export const useGymStore = defineStore('gym', () => {
       members.value = membersData.map(normalizeDoc);
       trainers.value = trainersData.map(normalizeDoc);
       membershipPlans.value = plansData.map(normalizeDoc);
+      personalTrainingPlans.value = ptPlansData.map(normalizeDoc);
+      personalTrainingSubscriptions.value = ptSubscriptionsData.map(normalizeDoc);
       memberships.value = membershipsData.map(normalizeDoc);
       attendance.value = attendanceData.map(normalizeDoc);
       payments.value = paymentsData.map(normalizeDoc);
@@ -110,6 +128,29 @@ export const useGymStore = defineStore('gym', () => {
 
   const plansById = computed(() => {
     return Object.fromEntries(membershipPlans.value.map((plan) => [plan.id, plan]));
+  });
+
+  const personalTrainingPlansById = computed(() => {
+    return Object.fromEntries(personalTrainingPlans.value.map((plan) => [plan.id, plan]));
+  });
+
+  const personalTrainingSubscriptionsDetailed = computed(() => {
+    return personalTrainingSubscriptions.value.map((subscription) => {
+      const trainer = trainersById.value[subscription.trainerId];
+      const plan = personalTrainingPlansById.value[subscription.planId];
+      const daysRemaining = diffDays(new Date(), new Date(subscription.endDate));
+      const effectiveStatus = subscription.status === PERSONAL_TRAINING_STATUS.ACTIVE && daysRemaining < 0
+        ? PERSONAL_TRAINING_STATUS.EXPIRED
+        : subscription.status;
+      return {
+        ...subscription,
+        trainerName: subscription.trainerName || trainer?.fullName || 'Unassigned',
+        planName: subscription.planName || plan?.name || 'Personal Training',
+        status: effectiveStatus,
+        daysRemaining,
+        pendingAmount: Math.max(Number(subscription.amount || 0) - Number(subscription.discountAmount || 0) - Number(subscription.amountPaid || 0), 0)
+      };
+    });
   });
 
   function getLatestMembership(memberId) {
@@ -148,9 +189,17 @@ export const useGymStore = defineStore('gym', () => {
       const trainer = trainersById.value[member.trainerId] || null;
       const membershipPlan = latestMembership ? plansById.value[latestMembership.planId] : null;
       const status = getMembershipStatusFromRecord(latestMembership, member.status);
-      const outstandingBalance = latestMembership
-        ? Math.max((latestMembership.finalAmount || 0) - (latestMembership.amountPaid || 0), 0)
+      const memberPersonalTraining = personalTrainingSubscriptionsDetailed.value
+        .filter((subscription) => subscription.memberId === member.id)
+        .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+      const activePersonalTraining = memberPersonalTraining.find((subscription) => subscription.status === PERSONAL_TRAINING_STATUS.ACTIVE) || null;
+      const membershipOutstanding = latestMembership
+        ? latestMembership.membershipAmount !== undefined
+          ? Math.max(Number(latestMembership.membershipAmount || 0) - Math.min(Number(latestMembership.discount || 0), Number(latestMembership.membershipAmount || 0)) - Number(latestMembership.membershipAmountPaid || 0), 0)
+          : Math.max(Number(latestMembership.finalAmount || 0) - Number(latestMembership.amountPaid || 0), 0)
         : 0;
+      const personalTrainingOutstanding = memberPersonalTraining.reduce((sum, subscription) => sum + subscription.pendingAmount, 0);
+      const outstandingBalance = membershipOutstanding + personalTrainingOutstanding;
 
       const memberAttendance = attendance.value
         .filter((entry) => entry.memberId === member.id)
@@ -169,6 +218,11 @@ export const useGymStore = defineStore('gym', () => {
         membershipPlanName: membershipPlan?.name || 'No Plan',
         membershipExpiryDate: latestMembership?.endDate || null,
         membershipStatus: status,
+        personalTraining: memberPersonalTraining,
+        activePersonalTraining,
+        hasPersonalTraining: memberPersonalTraining.length > 0,
+        membershipOutstanding,
+        personalTrainingOutstanding,
         outstandingBalance,
         totalVisits: memberAttendance.length,
         visitsThisMonth: thisMonthVisits,
@@ -281,6 +335,10 @@ export const useGymStore = defineStore('gym', () => {
     return paymentsDetailed.value.filter((entry) => entry.memberId === memberId);
   }
 
+  function getMemberPersonalTraining(memberId) {
+    return personalTrainingSubscriptionsDetailed.value.filter((subscription) => subscription.memberId === memberId);
+  }
+
   function generateMemberCode() {
     return `MBR-${new Date().getFullYear()}-${String(members.value.length + 1).padStart(3, '0')}`;
   }
@@ -327,9 +385,17 @@ export const useGymStore = defineStore('gym', () => {
     members.value.unshift({ id: memberId, ...memberData, createdAt: now, updatedAt: now });
 
     const plan = plansById.value[payload.planId];
-    const discount = Number(payload.discount || 0);
-    const finalAmount = Math.max(plan.price - discount, 0);
-    const paidAmount = Number(payload.amountPaid || 0);
+    const ptPlan = payload.addPersonalTraining ? personalTrainingPlansById.value[payload.personalTrainingPlanId] : null;
+    const trainer = ptPlan ? trainersById.value[payload.personalTrainerId] : null;
+    const totals = calculatePurchaseTotals({
+      membershipAmount: plan.price,
+      personalTrainingAmount: ptPlan?.price || 0,
+      discount: payload.discount,
+      amountPaid: payload.amountPaid
+    });
+    const membershipDiscount = Math.min(totals.discount, totals.membershipAmount);
+    const personalTrainingDiscount = totals.discount - membershipDiscount;
+    const paymentAllocation = allocatePayment(totals.amountPaid, totals.membershipAmount - membershipDiscount, totals.personalTrainingAmount - personalTrainingDiscount);
     const endDate = addDuration(payload.joiningDate, plan.duration - 1, plan.durationUnit);
 
     const msData = {
@@ -338,24 +404,59 @@ export const useGymStore = defineStore('gym', () => {
       startDate: payload.joiningDate,
       endDate: toIsoDate(endDate),
       originalAmount: plan.price,
-      discount,
-      finalAmount,
-      amountPaid: paidAmount,
+      membershipAmount: totals.membershipAmount,
+      personalTrainingAmount: totals.personalTrainingAmount,
+      discount: totals.discount,
+      totalAmount: totals.totalAmount,
+      finalAmount: totals.totalAmount,
+      amountPaid: totals.amountPaid,
+      pendingAmount: totals.pendingAmount,
+      membershipAmountPaid: paymentAllocation.membershipAmount,
       status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE'
     };
 
     const membershipId = await addDocument(`gyms/${gymId}/memberships`, msData);
     memberships.value.unshift({ id: membershipId, ...msData, createdAt: now, updatedAt: now });
 
-    if (paidAmount > 0) {
+    let personalTrainingSubscriptionId = null;
+    if (ptPlan && trainer) {
+      const ptStartDate = toIsoDate(payload.personalTrainingStartDate || payload.joiningDate);
+      const ptData = {
+        memberId,
+        membershipId,
+        trainerId: trainer.id,
+        trainerName: trainer.fullName,
+        planId: ptPlan.id,
+        planName: ptPlan.name,
+        startDate: ptStartDate,
+        endDate: calculateSubscriptionEndDate(ptStartDate, ptPlan.duration, ptPlan.durationUnit),
+        duration: ptPlan.duration,
+        durationUnit: ptPlan.durationUnit,
+        amount: totals.personalTrainingAmount,
+        discountAmount: personalTrainingDiscount,
+        amountPaid: paymentAllocation.personalTrainingAmount,
+        status: PERSONAL_TRAINING_STATUS.ACTIVE
+      };
+      personalTrainingSubscriptionId = await createPersonalTrainingSubscription(gymId, ptData, authStore.currentUser?.uid);
+      personalTrainingSubscriptions.value.unshift({ id: personalTrainingSubscriptionId, ...ptData, gymId, createdAt: now, updatedAt: now });
+    }
+
+    if (totals.amountPaid > 0) {
       const receiptNumber = generateReceiptNumber();
       const payData = {
         memberId,
         membershipId,
         receiptNumber,
-        amount: paidAmount,
+        personalTrainingSubscriptionId,
+        membershipAmount: paymentAllocation.membershipAmount,
+        personalTrainingAmount: paymentAllocation.personalTrainingAmount,
+        membershipChargeAmount: totals.membershipAmount,
+        personalTrainingChargeAmount: totals.personalTrainingAmount,
+        discount: totals.discount,
+        totalAmount: totals.totalAmount,
+        amount: totals.amountPaid,
         paymentMode: payload.paymentMode || PAYMENT_METHOD.CASH,
-        status: getStatusFromAmounts(finalAmount, paidAmount),
+        status: getStatusFromAmounts(totals.totalAmount, totals.amountPaid),
         paymentDate: payload.joiningDate,
         notes: 'Initial payment at registration'
       };
@@ -395,9 +496,12 @@ export const useGymStore = defineStore('gym', () => {
     const gymId = getGymId();
     const now = new Date().toISOString();
     const plan = plansById.value[payload.planId];
-    const discount = Number(payload.discount || 0);
-    const finalAmount = Math.max(plan.price - discount, 0);
-    const paidAmount = Number(payload.amountPaid || 0);
+    const ptPlan = payload.personalTrainingMode === 'NEW' ? personalTrainingPlansById.value[payload.personalTrainingPlanId] : null;
+    const trainer = ptPlan ? trainersById.value[payload.personalTrainerId] : null;
+    const totals = calculatePurchaseTotals({ membershipAmount: plan.price, personalTrainingAmount: ptPlan?.price || 0, discount: payload.discount, amountPaid: payload.amountPaid });
+    const membershipDiscount = Math.min(totals.discount, totals.membershipAmount);
+    const personalTrainingDiscount = totals.discount - membershipDiscount;
+    const paymentAllocation = allocatePayment(totals.amountPaid, totals.membershipAmount - membershipDiscount, totals.personalTrainingAmount - personalTrainingDiscount);
     const startDate = payload.startDate;
     const endDate = addDuration(startDate, plan.duration - 1, plan.durationUnit);
 
@@ -407,24 +511,44 @@ export const useGymStore = defineStore('gym', () => {
       startDate,
       endDate: toIsoDate(endDate),
       originalAmount: plan.price,
-      discount,
-      finalAmount,
-      amountPaid: paidAmount,
+      membershipAmount: totals.membershipAmount,
+      personalTrainingAmount: totals.personalTrainingAmount,
+      discount: totals.discount,
+      totalAmount: totals.totalAmount,
+      finalAmount: totals.totalAmount,
+      amountPaid: totals.amountPaid,
+      pendingAmount: totals.pendingAmount,
+      membershipAmountPaid: paymentAllocation.membershipAmount,
       status: diffDays(new Date(), endDate) < 0 ? 'EXPIRED' : 'ACTIVE'
     };
 
     const membershipId = await addDocument(`gyms/${gymId}/memberships`, msData);
     memberships.value.unshift({ id: membershipId, ...msData, createdAt: now, updatedAt: now });
 
-    if (paidAmount > 0) {
+    let personalTrainingSubscriptionId = null;
+    if (ptPlan && trainer) {
+      const ptStartDate = toIsoDate(payload.personalTrainingStartDate || startDate);
+      const ptData = { memberId: payload.memberId, membershipId, trainerId: trainer.id, trainerName: trainer.fullName, planId: ptPlan.id, planName: ptPlan.name, startDate: ptStartDate, endDate: calculateSubscriptionEndDate(ptStartDate, ptPlan.duration, ptPlan.durationUnit), duration: ptPlan.duration, durationUnit: ptPlan.durationUnit, amount: totals.personalTrainingAmount, discountAmount: personalTrainingDiscount, amountPaid: paymentAllocation.personalTrainingAmount, status: PERSONAL_TRAINING_STATUS.ACTIVE };
+      personalTrainingSubscriptionId = await createPersonalTrainingSubscription(gymId, ptData, authStore.currentUser?.uid);
+      personalTrainingSubscriptions.value.unshift({ id: personalTrainingSubscriptionId, ...ptData, gymId, createdAt: now, updatedAt: now });
+    }
+
+    if (totals.amountPaid > 0) {
       const receiptNumber = generateReceiptNumber();
       const payData = {
         memberId: payload.memberId,
         membershipId,
         receiptNumber,
-        amount: paidAmount,
+        personalTrainingSubscriptionId,
+        membershipAmount: paymentAllocation.membershipAmount,
+        personalTrainingAmount: paymentAllocation.personalTrainingAmount,
+        membershipChargeAmount: totals.membershipAmount,
+        personalTrainingChargeAmount: totals.personalTrainingAmount,
+        discount: totals.discount,
+        totalAmount: totals.totalAmount,
+        amount: totals.amountPaid,
         paymentMode: payload.paymentMode || PAYMENT_METHOD.CASH,
-        status: getStatusFromAmounts(finalAmount, paidAmount),
+        status: getStatusFromAmounts(totals.totalAmount, totals.amountPaid),
         paymentDate: payload.startDate,
         notes: 'Membership renewal payment'
       };
@@ -441,18 +565,36 @@ export const useGymStore = defineStore('gym', () => {
     const membership = memberships.value.find((r) => r.id === payload.membershipId);
     if (!membership) return null;
 
+    const member = membersDetailed.value.find((entry) => entry.id === payload.memberId);
+    const paymentAllocation = allocatePayment(payload.amount, member?.membershipOutstanding || 0, member?.personalTrainingOutstanding || 0);
     const newAmountPaid = (membership.amountPaid || 0) + Number(payload.amount);
+    const newMembershipAmountPaid = Number(membership.membershipAmountPaid ?? membership.amountPaid ?? 0) + paymentAllocation.membershipAmount;
     await updateDocument(`gyms/${gymId}/memberships`, payload.membershipId, {
-      amountPaid: newAmountPaid
+      amountPaid: newAmountPaid,
+      pendingAmount: Math.max(Number(membership.totalAmount ?? membership.finalAmount ?? 0) - newAmountPaid, 0),
+      membershipAmountPaid: newMembershipAmountPaid
     });
     membership.amountPaid = newAmountPaid;
     membership.updatedAt = now;
+    membership.membershipAmountPaid = newMembershipAmountPaid;
+
+    let remainingPtPayment = paymentAllocation.personalTrainingAmount;
+    const openSubscriptions = getMemberPersonalTraining(payload.memberId).filter((subscription) => subscription.pendingAmount > 0);
+    for (const subscription of openSubscriptions) {
+      if (remainingPtPayment <= 0) break;
+      const applied = Math.min(remainingPtPayment, subscription.pendingAmount);
+      subscription.amountPaid = Number(subscription.amountPaid || 0) + applied;
+      remainingPtPayment -= applied;
+      await updatePersonalTrainingSubscription(gymId, subscription.id, { amountPaid: subscription.amountPaid }, authStore.currentUser?.uid);
+    }
 
     const receiptNumber = generateReceiptNumber();
     const payData = {
       memberId: payload.memberId,
       membershipId: payload.membershipId,
       receiptNumber,
+      membershipAmount: paymentAllocation.membershipAmount,
+      personalTrainingAmount: paymentAllocation.personalTrainingAmount,
       amount: Number(payload.amount),
       paymentMode: payload.paymentMode,
       status: getStatusFromAmounts(membership.finalAmount, newAmountPaid),
@@ -477,7 +619,39 @@ export const useGymStore = defineStore('gym', () => {
       membershipStatus: payload.membershipStatus
     };
     const attId = await addDocument(`gyms/${gymId}/attendance`, attData);
-    attendance.value.unshift({ id: attId, ...attData, createdAt: now });
+    attendance.value.unshift({ id: attId, ...attData, createdAt: now, updatedAt: now });
+    return attId;
+  }
+
+  async function updateManualAttendance(attendanceId, payload) {
+    const gymId = getGymId();
+    const updateData = {
+      memberId: payload.memberId,
+      checkInTime: payload.checkInTime,
+      checkOutTime: payload.checkOutTime || null,
+      note: payload.note || '',
+      membershipStatus: payload.membershipStatus
+    };
+
+    await updateDocument(`gyms/${gymId}/attendance`, attendanceId, updateData);
+
+    const index = attendance.value.findIndex((entry) => entry.id === attendanceId);
+    if (index !== -1) {
+      attendance.value[index] = {
+        ...attendance.value[index],
+        ...updateData,
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    return true;
+  }
+
+  async function deleteManualAttendance(attendanceId) {
+    const gymId = getGymId();
+    await deleteDocument(`gyms/${gymId}/attendance`, attendanceId);
+    attendance.value = attendance.value.filter((entry) => entry.id !== attendanceId);
+    return true;
   }
 
   async function createPlan(payload) {
@@ -522,6 +696,37 @@ export const useGymStore = defineStore('gym', () => {
       await updateDocument(`gyms/${gymId}/membershipPlans`, planId, { active: newActive });
       target.active = newActive;
     }
+  }
+
+  async function createPtPlan(payload) {
+    const gymId = getGymId();
+    const now = new Date().toISOString();
+    const planData = { ...payload, duration: Number(payload.duration), price: Number(payload.price), status: payload.status || PLAN_STATUS.ACTIVE };
+    const planId = await createPersonalTrainingPlan(gymId, planData, authStore.currentUser?.uid);
+    personalTrainingPlans.value.unshift({ id: planId, ...planData, gymId, createdAt: now, updatedAt: now });
+  }
+
+  async function updatePtPlan(planId, payload) {
+    const gymId = getGymId();
+    await updatePersonalTrainingPlan(gymId, planId, payload, authStore.currentUser?.uid);
+    const index = personalTrainingPlans.value.findIndex((plan) => plan.id === planId);
+    if (index !== -1) personalTrainingPlans.value[index] = { ...personalTrainingPlans.value[index], ...payload, duration: Number(payload.duration), price: Number(payload.price) };
+  }
+
+  async function togglePtPlanActive(planId) {
+    const gymId = getGymId();
+    const plan = personalTrainingPlans.value.find((entry) => entry.id === planId);
+    if (!plan) return;
+    const status = plan.status === PLAN_STATUS.ACTIVE ? PLAN_STATUS.INACTIVE : PLAN_STATUS.ACTIVE;
+    await setPersonalTrainingPlanStatus(gymId, planId, status, authStore.currentUser?.uid);
+    plan.status = status;
+  }
+
+  async function updatePersonalTrainingStatus(subscriptionId, status) {
+    const gymId = getGymId();
+    await updatePersonalTrainingSubscription(gymId, subscriptionId, { status }, authStore.currentUser?.uid);
+    const subscription = personalTrainingSubscriptions.value.find((entry) => entry.id === subscriptionId);
+    if (subscription) subscription.status = status;
   }
 
   async function createTrainer(payload) {
@@ -589,6 +794,8 @@ export const useGymStore = defineStore('gym', () => {
     members,
     trainers,
     membershipPlans,
+    personalTrainingPlans,
+    personalTrainingSubscriptions,
     memberships,
     attendance,
     payments,
@@ -599,11 +806,13 @@ export const useGymStore = defineStore('gym', () => {
     membershipsDetailed,
     attendanceDetailed,
     paymentsDetailed,
+    personalTrainingSubscriptionsDetailed,
     dashboardStats,
     getMemberById,
     getMemberMemberships,
     getMemberAttendance,
     getMemberPayments,
+    getMemberPersonalTraining,
     getLatestMembership,
     addMember,
     updateMember,
@@ -612,9 +821,15 @@ export const useGymStore = defineStore('gym', () => {
     renewMembership,
     recordPayment,
     addManualAttendance,
+    updateManualAttendance,
+    deleteManualAttendance,
     createPlan,
     updatePlan,
     togglePlanActive,
+    createPtPlan,
+    updatePtPlan,
+    togglePtPlanActive,
+    updatePersonalTrainingStatus,
     createTrainer,
     updateTrainer,
     toggleTrainerStatus

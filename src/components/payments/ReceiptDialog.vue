@@ -1,10 +1,11 @@
 <script setup>
+import { computed } from 'vue';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatPaymentMethod } from '../../utils/formatters';
 
-defineProps({
+const props = defineProps({
   visible: {
     type: Boolean,
     default: false
@@ -16,6 +17,13 @@ defineProps({
 });
 
 const emit = defineEmits(['update:visible']);
+
+const membershipCharge = computed(() => Number(props.receipt?.membershipChargeAmount ?? props.receipt?.membershipAmount ?? props.receipt?.amount ?? 0));
+const personalTrainingCharge = computed(() => Number(props.receipt?.personalTrainingChargeAmount ?? props.receipt?.personalTrainingAmount ?? 0));
+const discountAmount = computed(() => Number(props.receipt?.discount || 0));
+const totalAmount = computed(() => Number(props.receipt?.totalAmount ?? Math.max(membershipCharge.value + personalTrainingCharge.value - discountAmount.value, 0)));
+const amountPaid = computed(() => Number(props.receipt?.amount ?? props.receipt?.amountPaid ?? 0));
+const outstandingAmount = computed(() => Math.max(totalAmount.value - amountPaid.value, 0));
 
 function printReceipt() {
   window.print();
@@ -46,14 +54,17 @@ function printReceipt() {
         <p><strong>Member:</strong> {{ receipt.memberName }}</p>
         <p><strong>Member ID:</strong> {{ receipt.memberCode }}</p>
         <p><strong>Membership Plan:</strong> {{ receipt.membershipPlanName }}</p>
-        <p><strong>Payment Mode:</strong> {{ receipt.paymentMode }}</p>
+        <p><strong>Payment Mode:</strong> {{ formatPaymentMethod(receipt.paymentMode) }}</p>
       </div>
 
       <div class="receipt-amount">
-        <p><span>Amount Paid</span><strong>{{ formatCurrency(receipt.amount) }}</strong></p>
+        <p><span>Membership</span><strong>{{ formatCurrency(membershipCharge) }}</strong></p>
+        <p v-if="personalTrainingCharge > 0" class="payment-breakdown__pt"><span>Personal Training</span><strong>{{ formatCurrency(personalTrainingCharge) }}</strong></p>
+        <p v-if="discountAmount > 0"><span>Discount</span><strong>- {{ formatCurrency(discountAmount) }}</strong></p>
+        <p><span>Amount Paid</span><strong>{{ formatCurrency(amountPaid) }}</strong></p>
         <p>
           <span>Outstanding</span>
-          <strong>{{ formatCurrency(receipt.outstandingBalance || 0) }}</strong>
+          <strong>{{ formatCurrency(outstandingAmount) }}</strong>
         </p>
       </div>
 

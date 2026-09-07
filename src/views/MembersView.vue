@@ -34,6 +34,7 @@ const initialStatus =
 const selectedStatus = ref(initialStatus);
 const selectedPlan = ref('ALL');
 const selectedTrainer = ref('ALL');
+const selectedPersonalTraining = ref('ALL');
 
 const page = ref(0);
 const rows = ref(8);
@@ -61,6 +62,13 @@ const trainerOptions = computed(() => [
   { label: 'All Trainers', value: 'ALL' },
   ...gymStore.trainers.map((trainer) => ({ label: trainer.fullName, value: trainer.fullName }))
 ]);
+const personalTrainingOptions = [
+  { label: 'All PT', value: 'ALL' },
+  { label: 'Has Personal Training', value: 'HAS_PT' },
+  { label: 'No Personal Training', value: 'NO_PT' },
+  { label: 'PT Expiring', value: 'PT_EXPIRING' },
+  { label: 'PT Expired', value: 'PT_EXPIRED' }
+];
 
 const actionItems = computed(() => [
   {
@@ -72,6 +80,11 @@ const actionItems = computed(() => [
     label: 'Edit Member',
     icon: 'pi pi-pencil',
     command: () => activeMember.value && router.push(`/members/${activeMember.value.id}/edit`)
+  },
+  {
+    label: 'View Activity Report',
+    icon: 'pi pi-chart-line',
+    command: () => activeMember.value && router.push({ path: '/reports', query: { report: 'MEMBER_ACTIVITY', memberId: activeMember.value.id } })
   },
   {
     label: 'Renew Membership',
@@ -91,6 +104,11 @@ const actionItems = computed(() => [
       }
     }
   },
+  ...(['ACTIVE', 'EXPIRING SOON', 'EXPIRED'].includes(activeMember.value?.membershipStatus) ? [{
+    label: activeMember.value?.membershipStatus === 'EXPIRED' ? 'Send Renewal Message' : 'Send Reminder',
+    icon: 'pi pi-send',
+    command: () => activeMember.value && router.push({ path: '/messages', query: { compose: '1', memberId: activeMember.value.id } })
+  }] : []),
   { separator: true },
   {
     label: 'Deactivate Member',
@@ -137,8 +155,7 @@ const filteredMembers = computed(() => {
     const matchesSearch =
       !search ||
       member.fullName.toLowerCase().includes(search) ||
-      member.mobile.includes(search) ||
-      member.memberCode.toLowerCase().includes(search);
+      member.mobile.includes(search);
 
     const matchesStatus =
       selectedStatus.value === MEMBER_STATUS.ALL || member.membershipStatus === selectedStatus.value;
@@ -148,8 +165,13 @@ const filteredMembers = computed(() => {
 
     const matchesTrainer =
       selectedTrainer.value === 'ALL' || member.trainerName === selectedTrainer.value;
+    const matchesPersonalTraining = selectedPersonalTraining.value === 'ALL' ||
+      (selectedPersonalTraining.value === 'HAS_PT' && member.hasPersonalTraining) ||
+      (selectedPersonalTraining.value === 'NO_PT' && !member.hasPersonalTraining) ||
+      (selectedPersonalTraining.value === 'PT_EXPIRING' && member.personalTraining.some((item) => item.daysRemaining >= 0 && item.daysRemaining <= 30)) ||
+      (selectedPersonalTraining.value === 'PT_EXPIRED' && member.personalTraining.some((item) => item.status === 'EXPIRED'));
 
-    return matchesSearch && matchesStatus && matchesPlan && matchesTrainer;
+    return matchesSearch && matchesStatus && matchesPlan && matchesTrainer && matchesPersonalTraining;
   });
 });
 
@@ -188,7 +210,22 @@ function clearFilters() {
   selectedStatus.value = MEMBER_STATUS.ALL;
   selectedPlan.value = 'ALL';
   selectedTrainer.value = 'ALL';
+  selectedPersonalTraining.value = 'ALL';
   page.value = 0;
+}
+
+function getPaymentStatus(member) {
+  const outstanding = Number(member.outstandingBalance || 0);
+
+  if (outstanding <= 0) {
+    return 'PAID';
+  }
+
+  if (member.latestMembership?.amountPaid > 0 || member.personalTrainingOutstanding > 0) {
+    return 'PARTIAL';
+  }
+
+  return 'PENDING';
 }
 
 function onPageChange(event) {
@@ -237,10 +274,10 @@ function onRecordPayment(payload) {
       </article>
     </div>
 
-    <div class="toolbar-grid toolbar-grid--open">
+    <div class="toolbar-grid toolbar-grid--open members-filter-toolbar">
       <span class="p-input-icon-left">
         <i class="pi pi-search" />
-        <InputText v-model="searchText" placeholder="Search by name, mobile, member ID" class="w-full" />
+        <InputText v-model="searchText" placeholder="Search by name, mobile" class="w-full" />
       </span>
 
       <Dropdown v-model="selectedStatus" :options="statusOptions" option-label="label" option-value="value" />
@@ -251,6 +288,7 @@ function onRecordPayment(payload) {
         option-label="label"
         option-value="value"
       />
+      <Dropdown v-model="selectedPersonalTraining" :options="personalTrainingOptions" option-label="label" option-value="value" />
 
       <Button label="Clear Filters" text @click="clearFilters" />
     </div>
@@ -259,14 +297,15 @@ function onRecordPayment(payload) {
       <table class="app-table">
         <thead>
           <tr>
-            <th>Photo</th>
-            <th>Member ID</th>
+            <!-- <th>Photo</th>
+            <th>Member ID</th> -->
             <th>Name</th>
             <th>Mobile</th>
             <th>Membership</th>
             <th>Expiry Date</th>
             <th>Trainer</th>
             <th>Status</th>
+            <th>Payment Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -277,19 +316,22 @@ function onRecordPayment(payload) {
             class="app-table__row-click"
             @click="router.push(`/members/${member.id}`)"
           >
-            <td><MemberAvatar :name="member.fullName" /></td>
-            <td>{{ member.memberCode }}</td>
-            <td class="link-text">{{ member.fullName }}</td>
+            <!-- <td><MemberAvatar :name="member.fullName" /></td> -->
+            <!-- <td>{{ member.memberCode }}</td> -->
+            <td class="link-text">{{ member.fullName }}<small v-if="member.activePersonalTraining" class="member-pt-indicator">PT: {{ member.activePersonalTraining.trainerName }}</small></td>
             <td>{{ member.mobile }}</td>
             <td>{{ member.membershipPlanName }}</td>
             <td>{{ member.membershipExpiryDate ? formatDate(member.membershipExpiryDate) : '--' }}</td>
             <td>{{ member.trainerName }}</td>
             <td><StatusBadge :status="member.membershipStatus" /></td>
+            <td><StatusBadge :status="getPaymentStatus(member)" /></td>
             <td>
               <Button
                 icon="pi pi-ellipsis-v"
                 text
                 rounded
+                aria-label="Open member actions"
+                title="Open member actions"
                 @click.stop="openActionMenu($event, member)"
               />
             </td>
@@ -320,6 +362,8 @@ function onRecordPayment(payload) {
       v-model:visible="renewVisible"
       :member="activeMember"
       :plans="gymStore.membershipPlans.filter((plan) => plan.active)"
+      :personal-training-plans="gymStore.personalTrainingPlans.filter((plan) => plan.status === 'ACTIVE')"
+      :trainers="gymStore.trainers.filter((trainer) => trainer.status === 'ACTIVE')"
       @submit="onRenew"
     />
 

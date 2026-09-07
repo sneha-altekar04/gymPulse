@@ -1,9 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import InputText from 'primevue/inputtext';
+import Paginator from 'primevue/paginator';
+import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 
 import ManualAttendanceDialog from '../components/attendance/ManualAttendanceDialog.vue';
@@ -14,25 +16,58 @@ import StatusBadge from '../components/common/StatusBadge.vue';
 import { useGymStore } from '../stores/gymStore';
 import { formatDate, formatDurationFromTimes, formatTime, toInputDate } from '../utils/formatters';
 
+function toBusinessDateKey(value) {
+  if (!value) return '';
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Kolkata'
+  }).format(date);
+}
+
+function tomorrowDateLimit() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
 const gymStore = useGymStore();
+const confirm = useConfirm();
 const toast = useToast();
 
-const dateFilter = ref(toInputDate());
+const dateFilter = ref('');
 const memberSearch = ref('');
 const membershipStatus = ref('ALL');
 const sourceFilter = ref('ALL');
+const page = ref(0);
+const rowsPerPage = 20;
 
 const manualDialogVisible = ref(false);
+const editingAttendance = ref(null);
+const tomorrowLimit = tomorrowDateLimit();
 
 const sourceOptions = ['ALL', 'FINGERPRINT', 'MANUAL'];
 const statusOptions = ['ALL', 'ACTIVE', 'EXPIRING SOON', 'EXPIRED', 'INACTIVE'];
 
 const filteredAttendance = computed(() => {
   const search = memberSearch.value.trim().toLowerCase();
+  const selectedDate = toBusinessDateKey(dateFilter.value);
 
   return gymStore.attendanceDetailed.filter((entry) => {
-    const entryDate = new Date(entry.checkInTime).toISOString().slice(0, 10);
-    const dateMatch = !dateFilter.value || entryDate === dateFilter.value;
+    const entryDate = toBusinessDateKey(entry.checkInTime);
+    const dateMatch = !selectedDate || entryDate === selectedDate;
     const memberMatch =
       !search ||
       entry.memberName.toLowerCase().includes(search) ||
@@ -44,10 +79,25 @@ const filteredAttendance = computed(() => {
   });
 });
 
+const pagedAttendance = computed(() => {
+  const start = page.value * rowsPerPage;
+  return filteredAttendance.value.slice(start, start + rowsPerPage);
+});
+
+watch(
+  () => filteredAttendance.value.length,
+  (count) => {
+    const maxPage = Math.max(Math.ceil(count / rowsPerPage) - 1, 0);
+    if (page.value > maxPage) {
+      page.value = maxPage;
+    }
+  }
+);
+
 const attendanceKpis = computed(() => {
-  const today = toInputDate();
+  const today = toBusinessDateKey(toInputDate());
   const todayRecords = gymStore.attendanceDetailed.filter(
-    (entry) => new Date(entry.checkInTime).toISOString().slice(0, 10) === today
+    (entry) => toBusinessDateKey(entry.checkInTime) === today
   );
 
   const currentlyInside = todayRecords.filter((entry) => !entry.checkOutTime).length;
@@ -76,9 +126,9 @@ const attendanceKpis = computed(() => {
 });
 
 const attendanceTimeline = computed(() => {
-  const today = toInputDate();
+  const today = toBusinessDateKey(toInputDate());
   const todayRecords = gymStore.attendanceDetailed.filter(
-    (entry) => new Date(entry.checkInTime).toISOString().slice(0, 10) === today
+    (entry) => toBusinessDateKey(entry.checkInTime) === today
   );
 
   const slots = [
@@ -102,20 +152,90 @@ const attendanceTimeline = computed(() => {
   }));
 });
 
+watch([dateFilter, memberSearch, membershipStatus, sourceFilter], () => {
+  page.value = 0;
+});
+
+watch(manualDialogVisible, (visible) => {
+  if (!visible) {
+    editingAttendance.value = null;
+  }
+});
+
 function clearFilters() {
-  dateFilter.value = toInputDate();
+  dateFilter.value = '';
   memberSearch.value = '';
   membershipStatus.value = 'ALL';
   sourceFilter.value = 'ALL';
+  page.value = 0;
 }
 
-function addManualEntry(payload) {
-  gymStore.addManualAttendance(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Attendance saved',
-    detail: 'Manual attendance entry recorded successfully.',
-    life: 2600
+function openAddAttendance() {
+  editingAttendance.value = null;
+  manualDialogVisible.value = true;
+}
+
+function openEditAttendance(entry) {
+  editingAttendance.value = entry;
+  manualDialogVisible.value = true;
+}
+
+async function submitAttendance(payload) {
+  try {
+    if (editingAttendance.value) {
+      await gymStore.updateManualAttendance(editingAttendance.value.id, payload);
+      toast.add({
+        severity: 'success',
+        summary: 'Attendance updated',
+        detail: 'Manual attendance entry updated successfully.',
+        life: 2600
+      });
+    } else {
+      await gymStore.addManualAttendance(payload);
+      toast.add({
+        severity: 'success',
+        summary: 'Attendance saved',
+        detail: 'Manual attendance entry recorded successfully.',
+        life: 2600
+      });
+    }
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: editingAttendance.value ? 'Update failed' : 'Save failed',
+      detail: error.message || 'Failed to save attendance.',
+      life: 4000
+    });
+    return;
+  } finally {
+    editingAttendance.value = null;
+  }
+}
+
+function deleteAttendance(entry) {
+  confirm.require({
+    message: `Delete the attendance entry for ${entry.memberName}?`,
+    header: 'Delete Attendance',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await gymStore.deleteManualAttendance(entry.id);
+        toast.add({
+          severity: 'info',
+          summary: 'Attendance deleted',
+          detail: 'Manual attendance entry removed successfully.',
+          life: 2600
+        });
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Delete failed',
+          detail: error.message || 'Failed to delete attendance.',
+          life: 4000
+        });
+      }
+    }
   });
 }
 </script>
@@ -124,7 +244,7 @@ function addManualEntry(payload) {
   <section class="stack-16 module-attendance">
     <PageHeader title="Attendance" subtitle="Track check-ins and monitor live floor activity">
       <template #actions>
-        <Button label="Manual Attendance" icon="pi pi-plus" @click="manualDialogVisible = true" />
+        <Button label="Manual Attendance" icon="pi pi-plus" @click="openAddAttendance" />
       </template>
     </PageHeader>
 
@@ -148,7 +268,15 @@ function addManualEntry(payload) {
     </div>
 
     <div class="toolbar-grid toolbar-grid--open">
-      <Calendar v-model="dateFilter" date-format="yy-mm-dd" show-icon manual-input />
+      <Calendar
+        v-model="dateFilter"
+        date-format="yy-mm-dd"
+        show-icon
+        manual-input
+        show-other-months
+        select-other-months
+        :maxDate="tomorrowLimit"
+      />
       <span class="p-input-icon-left">
         <i class="pi pi-search" />
         <InputText v-model="memberSearch" placeholder="Search member" />
@@ -169,10 +297,11 @@ function addManualEntry(payload) {
             <th>Duration</th>
             <th>Membership Status</th>
             <th>Source</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="entry in filteredAttendance" :key="entry.id" :class="{ 'table-row-alert': entry.memberStatus === 'EXPIRED' }">
+          <tr v-for="entry in pagedAttendance" :key="entry.id" :class="{ 'table-row-alert': entry.memberStatus === 'EXPIRED' }">
             <td>{{ entry.memberName }}</td>
             <td>{{ entry.memberCode }}</td>
             <td>{{ formatTime(entry.checkInTime) }} | {{ formatDate(entry.checkInTime) }}</td>
@@ -182,9 +311,21 @@ function addManualEntry(payload) {
             <td>
               <StatusBadge :status="entry.source" :tone="entry.source === 'MANUAL' ? 'accent' : 'neutral'" />
             </td>
+            <td class="table-actions">
+              <Button icon="pi pi-pencil" text rounded aria-label="Edit attendance" title="Edit attendance" @click.stop="openEditAttendance(entry)" />
+              <Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete attendance" title="Delete attendance" @click.stop="deleteAttendance(entry)" />
+            </td>
           </tr>
         </tbody>
       </table>
+
+      <Paginator
+        :rows="rowsPerPage"
+        :total-records="filteredAttendance.length"
+        :first="page * rowsPerPage"
+        :rows-per-page-options="[20]"
+        @page="page = $event.page"
+      />
     </div>
 
     <EmptyState
@@ -198,7 +339,8 @@ function addManualEntry(payload) {
     <ManualAttendanceDialog
       v-model:visible="manualDialogVisible"
       :members="gymStore.membersDetailed"
-      @submit="addManualEntry"
+      :entry="editingAttendance"
+      @submit="submitAttendance"
     />
   </section>
 </template>

@@ -13,7 +13,7 @@ import ReceiptDialog from '../components/payments/ReceiptDialog.vue';
 import StatCard from '../components/common/StatCard.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { useGymStore } from '../stores/gymStore';
-import { formatCurrency, formatDate, toInputDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatPaymentMethod, toInputDate } from '../utils/formatters';
 
 const route = useRoute();
 const router = useRouter();
@@ -23,6 +23,9 @@ const gymStore = useGymStore();
 const recordDialogVisible = ref(false);
 const receiptDialogVisible = ref(false);
 const activeReceipt = ref(null);
+const paymentDialogMemberId = ref('');
+const paymentDialogAmount = ref(0);
+const paymentDialogShowReceipt = ref(true);
 
 const fromDate = ref('');
 const toDate = ref('');
@@ -84,10 +87,25 @@ function clearFilters() {
   statusFilter.value = 'ALL';
 }
 
+function openRecordPaymentDialog() {
+  paymentDialogMemberId.value = '';
+  paymentDialogAmount.value = 0;
+  paymentDialogShowReceipt.value = true;
+  recordDialogVisible.value = true;
+}
+
+function openCompletePayment(payment) {
+  paymentDialogMemberId.value = payment.memberId;
+  const member = gymStore.getMemberById(payment.memberId);
+  paymentDialogAmount.value = Number(member?.outstandingBalance || payment.outstandingBalance || 0);
+  paymentDialogShowReceipt.value = false;
+  recordDialogVisible.value = true;
+}
+
 function recordPayment(payload) {
   const receipt = gymStore.recordPayment(payload);
   toast.add({ severity: 'success', summary: 'Payment recorded', life: 2400 });
-  if (receipt) {
+  if (receipt && payload.showReceipt !== false) {
     activeReceipt.value = gymStore.paymentsDetailed.find((entry) => entry.id === receipt.id) || null;
     receiptDialogVisible.value = true;
   }
@@ -103,7 +121,7 @@ function viewReceipt(payment) {
   <section class="stack-16">
     <PageHeader title="Payments" subtitle="Track collections, pending balances, and receipts">
       <template #actions>
-        <Button label="Record Payment" icon="pi pi-plus" @click="recordDialogVisible = true" />
+        <Button label="Record Payment" icon="pi pi-plus" @click="openRecordPaymentDialog" />
       </template>
     </PageHeader>
 
@@ -115,13 +133,13 @@ function viewReceipt(payment) {
     </div>
 
     <div class="panel-card stack-16">
-      <div class="toolbar-grid">
+      <div class="toolbar-grid payments-filter-toolbar">
         <Calendar v-model="fromDate" date-format="yy-mm-dd" show-icon manual-input placeholder="From date" />
         <Calendar v-model="toDate" date-format="yy-mm-dd" show-icon manual-input placeholder="To date" />
         <Dropdown v-model="memberFilter" :options="memberOptions" option-label="label" option-value="value" />
         <Dropdown v-model="modeFilter" :options="modeOptions" />
         <Dropdown v-model="statusFilter" :options="statusOptions" />
-        <Button label="Clear Filters" text @click="clearFilters" />
+        <Button label="Clear Filters" text class="payments-filter-toolbar__clear" @click="clearFilters" />
       </div>
 
       <div v-if="filteredPayments.length" class="app-table-wrap">
@@ -145,11 +163,19 @@ function viewReceipt(payment) {
               <td>{{ formatDate(payment.paymentDate) }}</td>
               <td>{{ payment.membershipPlanName }}</td>
               <td>{{ formatCurrency(payment.amount) }}</td>
-              <td>{{ payment.paymentMode }}</td>
+              <td>{{ formatPaymentMethod(payment.paymentMode) }}</td>
               <td><StatusBadge :status="payment.status" /></td>
               <td class="table-actions">
-                <Button icon="pi pi-file" text @click="viewReceipt(payment)" />
-                <Button icon="pi pi-user" text @click="router.push(`/members/${payment.memberId}`)" />
+                <Button
+                  v-if="payment.status === 'PARTIAL'"
+                  icon="pi pi-check-circle"
+                  text
+                  aria-label="Complete payment"
+                  title="Complete payment"
+                  @click="openCompletePayment(payment)"
+                />
+                <Button icon="pi pi-file" text aria-label="View receipt" title="View receipt" @click="viewReceipt(payment)" />
+                <Button icon="pi pi-user" text aria-label="View member" title="View member" @click="router.push(`/members/${payment.memberId}`)" />
               </td>
             </tr>
           </tbody>
@@ -168,6 +194,9 @@ function viewReceipt(payment) {
     <RecordPaymentDialog
       v-model:visible="recordDialogVisible"
       :members="gymStore.membersDetailed"
+      :default-member-id="paymentDialogMemberId"
+      :default-amount="paymentDialogAmount"
+      :show-receipt="paymentDialogShowReceipt"
       @submit="recordPayment"
     />
 

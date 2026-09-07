@@ -53,7 +53,6 @@ const normalizedItems = computed(() => {
           <MemberAvatar :name="item.name" />
           <div>
             <p class="attendance-list__name">{{ item.name }}</p>
-            <p class="attendance-list__id">{{ item.id }}</p>
           </div>
         </div>
 

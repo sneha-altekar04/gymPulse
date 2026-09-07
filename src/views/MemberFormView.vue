@@ -102,7 +102,8 @@ function onCancel() {
       <MemberForm
         :model-value="initialModel"
         :plans="gymStore.membershipPlans.filter((plan) => plan.active)"
-        :trainers="gymStore.trainers"
+        :personal-training-plans="gymStore.personalTrainingPlans.filter((plan) => plan.status === 'ACTIVE')"
+        :trainers="gymStore.trainers.filter((trainer) => trainer.status === 'ACTIVE')"
         :mode="isEditMode ? 'edit' : 'create'"
         :saving="saving"
         @submit="onSubmit"

@@ -9,6 +9,7 @@ import Textarea from 'primevue/textarea';
 
 import { PAYMENT_METHOD } from '../../constants/domain';
 import { formatCurrency, toInputDate } from '../../utils/formatters';
+import { allocatePayment } from '../../utils/purchaseCalculations';
 
 const props = defineProps({
   visible: {
@@ -22,6 +23,14 @@ const props = defineProps({
   defaultMemberId: {
     type: String,
     default: ''
+  },
+  defaultAmount: {
+    type: Number,
+    default: 0
+  },
+  showReceipt: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -47,7 +56,7 @@ watch(
   (value) => {
     if (value) {
       form.memberId = props.defaultMemberId || '';
-      form.amount = 0;
+      form.amount = Number(props.defaultAmount || 0);
       form.paymentMode = PAYMENT_METHOD.CASH;
       form.paymentDate = toInputDate();
       form.notes = '';
@@ -58,7 +67,12 @@ watch(
 const selectedMember = computed(() => props.members.find((member) => member.id === form.memberId) || null);
 
 const selectedMembership = computed(() => selectedMember.value?.latestMembership || null);
-const outstandingBalance = computed(() => selectedMember.value?.outstandingBalance || 0);
+const membershipAmount = computed(() => Number(selectedMembership.value?.finalAmount ?? selectedMembership.value?.membershipAmount ?? 0));
+const membershipPaid = computed(() => Number(selectedMembership.value?.membershipAmountPaid ?? selectedMembership.value?.amountPaid ?? 0));
+const membershipOutstanding = computed(() => Number(selectedMember.value?.membershipOutstanding ?? Math.max(membershipAmount.value - membershipPaid.value, 0)));
+const personalTrainingOutstanding = computed(() => Number(selectedMember.value?.personalTrainingOutstanding || 0));
+const outstandingBalance = computed(() => Number(selectedMember.value?.outstandingBalance ?? membershipOutstanding.value + personalTrainingOutstanding.value));
+const paymentAllocation = computed(() => allocatePayment(form.amount, membershipOutstanding.value, personalTrainingOutstanding.value));
 const canSubmit = computed(() => {
   return (
     selectedMember.value &&
@@ -90,7 +104,8 @@ function submit() {
     amount: Number(form.amount),
     paymentMode: form.paymentMode,
     paymentDate: form.paymentDate,
-    notes: form.notes
+    notes: form.notes,
+    showReceipt: props.showReceipt
   });
 
   close();
@@ -108,17 +123,45 @@ function submit() {
     <div class="stack-16">
       <label class="app-field">
         <span>Select Member</span>
-        <Dropdown v-model="form.memberId" :options="memberOptions" filter placeholder="Search member" />
+        <Dropdown
+          v-model="form.memberId"
+          :options="memberOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          placeholder="Search member"
+        />
       </label>
 
       <div v-if="selectedMember && selectedMembership" class="summary-bar">
-        <p>
-          <strong>{{ selectedMember.fullName }}</strong>
-          <span>{{ selectedMember.membershipPlanName }}</span>
-          <span>Membership Amount: {{ formatCurrency(selectedMembership.finalAmount) }}</span>
-          <span>Paid: {{ formatCurrency(selectedMembership.amountPaid) }}</span>
-          <span>Outstanding: {{ formatCurrency(outstandingBalance) }}</span>
-        </p>
+        <div class="record-payment-summary">
+          <div class="record-payment-summary__head">
+            <div>
+              <strong>{{ selectedMember.fullName }}</strong>
+              <p>{{ selectedMember.memberCode }} · {{ selectedMember.membershipPlanName }}</p>
+            </div>
+            <span class="record-payment-summary__total">{{ formatCurrency(outstandingBalance) }} due</span>
+          </div>
+
+          <div class="record-payment-summary__grid">
+            <div>
+              <span>Membership Amount</span>
+              <strong>{{ formatCurrency(membershipAmount) }}</strong>
+            </div>
+            <div>
+              <span>Paid So Far</span>
+              <strong>{{ formatCurrency(membershipPaid) }}</strong>
+            </div>
+            <div>
+              <span>Outstanding Membership</span>
+              <strong>{{ formatCurrency(membershipOutstanding) }}</strong>
+            </div>
+            <div>
+              <span>Outstanding PT</span>
+              <strong>{{ formatCurrency(personalTrainingOutstanding) }}</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="app-form-grid app-form-grid--two">
@@ -146,6 +189,11 @@ function submit() {
           <span>Notes (optional)</span>
           <Textarea v-model="form.notes" rows="2" auto-resize />
         </label>
+      </div>
+
+      <div v-if="selectedMember && Number(form.amount) > 0" class="payment-breakdown payment-breakdown--compact">
+        <p><span>Allocated to Membership</span><strong>{{ formatCurrency(paymentAllocation.membershipAmount) }}</strong></p>
+        <p class="payment-breakdown__pt"><span>Allocated to Personal Training</span><strong>{{ formatCurrency(paymentAllocation.personalTrainingAmount) }}</strong></p>
       </div>
 
       <div class="form-actions">

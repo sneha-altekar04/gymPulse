@@ -40,6 +40,7 @@ const menuGroups = [
       { label: 'Attendance', icon: 'pi pi-calendar', to: '/attendance' },
       { label: 'Memberships', icon: 'pi pi-id-card', to: '/memberships' },
       { label: 'Payments', icon: 'pi pi-credit-card', to: '/payments' },
+      { label: 'Messages', icon: 'pi pi-comments', to: '/messages' },
       { label: 'Trainers', icon: 'pi pi-briefcase', to: '/trainers' }
     ]
   },
@@ -131,7 +132,7 @@ async function handleLogout() {
           <span>GP</span>
         </div>
         <div v-if="!isSidebarCollapsed" class="app-sidebar__brand-copy">
-          <h1>GymPulse</h1>
+          <h1>K3 Oxygen</h1>
           <p>{{ userProfile?.gymName || 'My Gym' }}</p>
         </div>
       </div>

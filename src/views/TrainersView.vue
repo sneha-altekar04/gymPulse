@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/dropdown';
@@ -11,9 +12,10 @@ import PageHeader from '../components/common/PageHeader.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { GENDER_OPTIONS } from '../constants/domain';
 import { useGymStore } from '../stores/gymStore';
-import { formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 const gymStore = useGymStore();
+const router = useRouter();
 const toast = useToast();
 
 const formDialogVisible = ref(false);
@@ -36,10 +38,19 @@ const errors = reactive({});
 const trainersWithAssignments = computed(() => {
   return gymStore.trainers.map((trainer) => {
     const assignedMembers = gymStore.membersDetailed.filter((member) => member.trainerId === trainer.id);
+    const personalTrainingMembers = gymStore.personalTrainingSubscriptionsDetailed.filter((subscription) => subscription.trainerId === trainer.id);
+    const activePtMembers = personalTrainingMembers.filter((subscription) => subscription.status === 'ACTIVE');
+    const expiredPtMembers = personalTrainingMembers.filter((subscription) => subscription.status === 'EXPIRED');
+    const ptRevenue = gymStore.paymentsDetailed.filter((payment) => personalTrainingMembers.some((subscription) => subscription.id === payment.personalTrainingSubscriptionId)).reduce((sum, payment) => sum + Number(payment.personalTrainingAmount || 0), 0);
 
     return {
       ...trainer,
-      assignedMembers
+      assignedMembers,
+      personalTrainingMembers,
+      activePtMembers,
+      expiredPtMembers,
+      ptRevenue,
+      upcomingPtExpiries: activePtMembers.filter((subscription) => subscription.daysRemaining >= 0 && subscription.daysRemaining <= 30).length
     };
   });
 });
@@ -155,11 +166,14 @@ function toggleStatus(trainer) {
               <td>{{ trainer.assignedMembers.length }}</td>
               <td><StatusBadge :status="trainer.status" /></td>
               <td class="table-actions">
-                <Button icon="pi pi-eye" text @click="openDetails(trainer)" />
-                <Button icon="pi pi-pencil" text @click="openEdit(trainer)" />
+                <Button icon="pi pi-chart-line" text aria-label="View trainer activity report" title="View trainer activity report" @click="router.push({ path: '/reports', query: { report: 'TRAINER_MEMBER_ACTIVITY', trainerId: trainer.id } })" />
+                <Button icon="pi pi-eye" text aria-label="View trainer details" title="View trainer details" @click="openDetails(trainer)" />
+                <Button icon="pi pi-pencil" text aria-label="Edit trainer" title="Edit trainer" @click="openEdit(trainer)" />
                 <Button
                   :icon="trainer.status === 'ACTIVE' ? 'pi pi-eye-slash' : 'pi pi-check'"
                   text
+                  :aria-label="trainer.status === 'ACTIVE' ? 'Deactivate trainer' : 'Activate trainer'"
+                  :title="trainer.status === 'ACTIVE' ? 'Deactivate trainer' : 'Activate trainer'"
                   @click="toggleStatus(trainer)"
                 />
               </td>
@@ -273,6 +287,14 @@ function toggleStatus(trainer) {
             <p v-else>No assigned members.</p>
           </div>
         </div>
+        <div class="module-summary-row">
+          <article class="module-summary-card module-summary-card--violet"><p class="module-summary-card__label">PT Members</p><p class="module-summary-card__value">{{ selectedTrainer.personalTrainingMembers.length }}</p></article>
+          <article class="module-summary-card module-summary-card--teal"><p class="module-summary-card__label">Active PT Members</p><p class="module-summary-card__value">{{ selectedTrainer.activePtMembers.length }}</p></article>
+          <article class="module-summary-card module-summary-card--coral"><p class="module-summary-card__label">Expired PT Members</p><p class="module-summary-card__value">{{ selectedTrainer.expiredPtMembers.length }}</p></article>
+          <article class="module-summary-card module-summary-card--amber"><p class="module-summary-card__label">Upcoming PT Expiries</p><p class="module-summary-card__value">{{ selectedTrainer.upcomingPtExpiries }}</p></article>
+          <article class="module-summary-card module-summary-card--coral"><p class="module-summary-card__label">PT Revenue</p><p class="module-summary-card__value">{{ formatCurrency(selectedTrainer.ptRevenue) }}</p></article>
+        </div>
+        <div v-if="selectedTrainer.personalTrainingMembers.length" class="app-table-wrap"><table class="app-table"><thead><tr><th>Member</th><th>PT Plan</th><th>Start Date</th><th>End Date</th><th>Status</th><th>Amount</th></tr></thead><tbody><tr v-for="subscription in selectedTrainer.personalTrainingMembers" :key="subscription.id"><td>{{ gymStore.getMemberById(subscription.memberId)?.fullName || 'Unknown Member' }}</td><td>{{ subscription.planName }}</td><td>{{ formatDate(subscription.startDate) }}</td><td>{{ formatDate(subscription.endDate) }}</td><td><StatusBadge :status="subscription.status" /></td><td>{{ formatCurrency(subscription.amount) }}</td></tr></tbody></table></div>
       </div>
     </Dialog>
   </section>

@@ -5,8 +5,13 @@ service cloud.firestore {
     // and the user's gymId matches the document's gymId
     
     match /users/{uid} {
-      // Users can only read/write their own profile
-      allow read, write: if request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.gymId == resource.data.gymId;
+      allow delete: if false;
     }
     
     match /gyms/{gymId} {
@@ -37,6 +42,20 @@ service cloud.firestore {
         allow update: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
         allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
       }
+
+      match /personalTrainingPlans/{planId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow create: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER') && request.resource.data.gymId == gymId;
+        allow update: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER') && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
+        allow delete: if false;
+      }
+
+      match /personalTrainingSubscriptions/{subscriptionId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow create: if request.auth != null && userBelongsToGym(gymId) && request.resource.data.gymId == gymId;
+        allow update: if request.auth != null && userBelongsToGym(gymId) && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
+        allow delete: if false;
+      }
       
       // Attendance subcollection
       match /attendance/{attendanceId} {
@@ -66,6 +85,39 @@ service cloud.firestore {
       match /settings/{settingId} {
         allow read: if request.auth != null && userBelongsToGym(gymId);
         allow write: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+      }
+
+      match /messageTemplates/{templateId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow create: if request.auth != null
+          && userBelongsToGym(gymId)
+          && hasRole('OWNER')
+          && request.resource.data.gymId == gymId;
+        allow update: if request.auth != null
+          && userBelongsToGym(gymId)
+          && hasRole('OWNER')
+          && resource.data.gymId == gymId
+          && request.resource.data.gymId == gymId;
+        allow delete: if false;
+      }
+
+      match /messageSettings/{settingId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow create, update: if request.auth != null
+          && userBelongsToGym(gymId)
+          && hasRole('OWNER')
+          && request.resource.data.gymId == gymId;
+        allow delete: if false;
+      }
+
+      match /messageCampaigns/{campaignId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow write: if false;
+      }
+
+      match /messageLogs/{messageId} {
+        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow write: if false;
       }
       
       // Daily Stats subcollection

@@ -255,6 +255,33 @@ const membershipPlansSeed = [
   }
 ];
 
+const personalTrainingPlansSeed = [
+  {
+    name: 'PT Starter',
+    duration: 1,
+    durationUnit: 'MONTH',
+    price: 4500,
+    description: 'One month of personalized training and progress tracking',
+    status: 'ACTIVE'
+  },
+  {
+    name: 'PT Transformation',
+    duration: 3,
+    durationUnit: 'MONTH',
+    price: 12000,
+    description: 'Three-month coaching program with structured progression',
+    status: 'ACTIVE'
+  },
+  {
+    name: 'PT Elite',
+    duration: 6,
+    durationUnit: 'MONTH',
+    price: 22000,
+    description: 'Six-month personal training program for long-term goals',
+    status: 'ACTIVE'
+  }
+];
+
 const membershipsSeed = [
   {
     memberId: 'member-001',
@@ -313,6 +340,25 @@ const membershipsSeed = [
   }
 ];
 
+const usersSeed = [
+  {
+    id: '57yppx5fWfTKL7PMVmYmC67eVuk1',
+    name: 'Owner',
+    email: 'owner@gympulse.com',
+    role: 'OWNER',
+    gymId: 'demo-gym-001',
+    active: true
+  },
+  {
+    id: 'TzbK3KUid0MFSApYboxJGQC0Hq93',
+    name: 'Owner',
+    email: 'altekarsneha@gmail.com',
+    role: 'OWNER',
+    gymId: 'demo-gym-001',
+    active: true
+  }
+];
+
 /**
  * Seed database with mock data
  * @param {string} projectId - Firebase project ID
@@ -361,7 +407,19 @@ export const seedDatabase = async (projectId, gymId) => {
       docCount++;
     }
 
-    // 4. Add Memberships
+    // 4. Add Personal Training Plans
+    console.log('🏋️ Seeding personal training plans...');
+    for (let i = 0; i < personalTrainingPlansSeed.length; i++) {
+      const planId = `pt-plan-${String(i + 1).padStart(3, '0')}`;
+      const planRef = doc(db, `gyms/${gymId}/personalTrainingPlans`, planId);
+      batch.set(planRef, {
+        ...personalTrainingPlansSeed[i],
+        gymId
+      });
+      docCount++;
+    }
+
+    // 5. Add Memberships
     console.log('🎫 Seeding memberships...');
     for (let i = 0; i < membershipsSeed.length; i++) {
       const membershipId = `membership-${String(i + 1).padStart(3, '0')}`;
@@ -373,7 +431,7 @@ export const seedDatabase = async (projectId, gymId) => {
       docCount++;
     }
 
-    // 5. Add Attendance
+    // 6. Add Attendance
     console.log('✅ Seeding attendance...');
     for (let i = 0; i < attendanceSeed.length; i++) {
       const attendanceId = `attendance-${String(i + 1).padStart(3, '0')}`;
@@ -385,7 +443,7 @@ export const seedDatabase = async (projectId, gymId) => {
       docCount++;
     }
 
-    // 6. Add Payments
+    // 7. Add Payments
     console.log('💰 Seeding payments...');
     for (let i = 0; i < paymentsSeed.length; i++) {
       const paymentId = `payment-${String(i + 1).padStart(3, '0')}`;
@@ -393,6 +451,19 @@ export const seedDatabase = async (projectId, gymId) => {
       batch.set(paymentRef, {
         ...paymentsSeed[i],
         gymId
+      });
+      docCount++;
+    }
+
+    // 8. Add Users
+    console.log('🔐 Seeding users...');
+    for (let i = 0; i < usersSeed.length; i++) {
+      const userRef = doc(db, 'users', usersSeed[i].id);
+      batch.set(userRef, {
+        ...usersSeed[i],
+        gymId,
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
       docCount++;
     }
@@ -405,9 +476,11 @@ export const seedDatabase = async (projectId, gymId) => {
     console.log('  ✓ trainers');
     console.log('  ✓ members');
     console.log('  ✓ membershipPlans');
+    console.log('  ✓ personalTrainingPlans');
     console.log('  ✓ memberships');
     console.log('  ✓ attendance');
     console.log('  ✓ payments');
+    console.log('  ✓ users');
     
     return { success: true, documentsAdded: docCount };
   } catch (error) {

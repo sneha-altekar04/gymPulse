@@ -96,6 +96,10 @@ function openRenew(record) {
   renewVisible.value = true;
 }
 
+function sendReminder(record) {
+  router.push({ path: '/messages', query: { compose: '1', memberId: record.memberId } });
+}
+
 function renewMembership(payload) {
   gymStore.renewMembership(payload);
   toast.add({
@@ -111,6 +115,7 @@ function renewMembership(payload) {
   <section class="stack-16">
     <PageHeader title="Memberships" subtitle="Track active and historical membership records">
       <template #actions>
+        <Button label="Performance Report" icon="pi pi-chart-bar" text @click="router.push({ path: '/reports', query: { report: 'MEMBERSHIP_PERFORMANCE' } })" />
         <Button label="Membership Plans" icon="pi pi-list" severity="secondary" @click="router.push('/memberships/plans')" />
       </template>
     </PageHeader>
@@ -160,8 +165,17 @@ function renewMembership(payload) {
                 />
               </td>
               <td class="table-actions">
-                <Button icon="pi pi-user" text @click="router.push(`/members/${record.memberId}`)" />
-                <Button icon="pi pi-refresh" text @click="openRenew(record)" />
+                <Button icon="pi pi-user" text aria-label="View member" title="View member" @click="router.push(`/members/${record.memberId}`)" />
+                <Button
+                  v-if="record.daysRemaining <= 7"
+                  icon="pi pi-send"
+                  text
+                  :aria-label="record.daysRemaining < 0 ? 'Send renewal message' : 'Send expiry reminder'"
+                  :title="record.daysRemaining < 0 ? 'Send renewal message' : 'Send expiry reminder'"
+                  v-tooltip.top="record.daysRemaining < 0 ? 'Send renewal message' : 'Send expiry reminder'"
+                  @click="sendReminder(record)"
+                />
+                <Button icon="pi pi-refresh" text aria-label="Renew membership" title="Renew membership" @click="openRenew(record)" />
               </td>
             </tr>
           </tbody>
@@ -181,6 +195,8 @@ function renewMembership(payload) {
       v-model:visible="renewVisible"
       :member="activeMember"
       :plans="gymStore.membershipPlans.filter((plan) => plan.active)"
+      :personal-training-plans="gymStore.personalTrainingPlans.filter((plan) => plan.status === 'ACTIVE')"
+      :trainers="gymStore.trainers.filter((trainer) => trainer.status === 'ACTIVE')"
       @submit="renewMembership"
     />
   </section>

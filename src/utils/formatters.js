@@ -6,25 +6,52 @@ export function formatCurrency(value) {
   }).format(value);
 }
 
+export function formatPaymentMethod(value) {
+  if (!value) {
+    return '--';
+  }
+
+  return String(value)
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export function formatDate(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     timeZone: 'Asia/Kolkata'
-  }).format(new Date(dateString));
+  }).format(date);
 }
 
 export function formatTime(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
   return new Intl.DateTimeFormat('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
     timeZone: 'Asia/Kolkata'
-  }).format(new Date(dateString));
+  }).format(date);
 }
 
 export function formatDateTime(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: 'short',
@@ -33,7 +60,7 @@ export function formatDateTime(dateString) {
     minute: '2-digit',
     hour12: true,
     timeZone: 'Asia/Kolkata'
-  }).format(new Date(dateString));
+  }).format(date);
 }
 
 export function toInputDate(dateValue = new Date()) {
