@@ -15,7 +15,7 @@ const router = useRouter();
 
 const role = computed(() => authStore.userProfile?.role || 'OWNER');
 const firstName = computed(() => authStore.userProfile?.name?.split(' ')[0] || 'Sneha');
-const gymName = computed(() => authStore.userProfile?.gymName || 'Downtown Fitness');
+const gymName = computed(() => authStore.userProfile?.gymName || 'K3 Oxygen');
 const isLoading = computed(() => gymStore.loading && !gymStore.dataLoaded);
 const insights = computed(() => buildDashboardInsights({
   members: gymStore.membersDetailed,
