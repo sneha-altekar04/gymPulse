@@ -32,3 +32,24 @@ export function requireCronSecret(request) {
     throw error;
   }
 }
+
+export async function requireOwnerUser(request) {
+  const authorization = request.headers.authorization || '';
+  if (!authorization.startsWith('Bearer ')) {
+    const error = new Error('Authentication required.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const decodedToken = await getAdminAuth().verifyIdToken(authorization.slice(7));
+  const userSnapshot = await getAdminDb().doc(`users/${decodedToken.uid}`).get();
+  const user = userSnapshot.data();
+
+  if (!user?.gymId || user.role !== 'OWNER') {
+    const error = new Error('You do not have permission to seed this database.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  return { uid: decodedToken.uid, gymId: user.gymId, role: user.role };
+}

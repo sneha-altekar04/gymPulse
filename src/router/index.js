@@ -15,8 +15,15 @@ import TrainersView from '../views/TrainersView.vue';
 import SettingsView from '../views/SettingsView.vue';
 import LoginView from '../views/LoginView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
+import PublicGymProfileView from '../views/PublicGymProfileView.vue';
 
 const routes = [
+  {
+    path: '/',
+    name: 'public-gym-profile',
+    component: PublicGymProfileView,
+    meta: { requiresAuth: false }
+  },
   {
     path: '/login',
     name: 'login',
@@ -30,103 +37,98 @@ const routes = [
     meta: { title: 'Forgot Password', requiresAuth: false }
   },
   {
-    path: '/',
+    path: '/app',
     component: AppLayout,
-    meta: { requiresAuth: true },
     children: [
       {
-        path: '',
-        redirect: '/dashboard'
-      },
-      {
-        path: 'dashboard',
+        path: '/dashboard',
         name: 'dashboard',
         component: DashboardView,
         meta: { title: 'Dashboard', requiresAuth: true }
       },
       {
-        path: 'members',
+        path: '/members',
         name: 'members',
         component: MembersView,
         meta: { title: 'Members', requiresAuth: true }
       },
       {
-        path: 'members/new',
+        path: '/members/new',
         name: 'member-new',
         component: MemberFormView,
         meta: { title: 'Add Member', requiresAuth: true }
       },
       {
-        path: 'members/:id',
+        path: '/members/:id',
         name: 'member-details',
         component: MemberDetailsView,
         meta: { title: 'Member Details', requiresAuth: true }
       },
       {
-        path: 'members/:id/edit',
+        path: '/members/:id/edit',
         name: 'member-edit',
         component: MemberFormView,
         meta: { title: 'Edit Member', requiresAuth: true }
       },
       {
-        path: 'attendance',
+        path: '/attendance',
         name: 'attendance',
         component: AttendanceView,
         meta: { title: 'Attendance', requiresAuth: true }
       },
       {
-        path: 'memberships',
+        path: '/memberships',
         name: 'memberships',
         component: MembershipsView,
         meta: { title: 'Memberships', requiresAuth: true }
       },
       {
-        path: 'memberships/plans',
+        path: '/memberships/plans',
         name: 'membership-plans',
         component: MembershipPlansView,
         meta: { title: 'Membership Plans', requiresAuth: true }
       },
       {
-        path: 'payments',
+        path: '/payments',
         name: 'payments',
         component: PaymentsView,
         meta: { title: 'Payments', requiresAuth: true }
       },
       {
-        path: 'messages',
+        path: '/messages',
         name: 'messages',
         component: MessagesView,
         meta: { title: 'Messages', requiresAuth: true }
       },
       {
-        path: 'trainers',
+        path: '/trainers',
         name: 'trainers',
         component: TrainersView,
         meta: { title: 'Trainers', requiresAuth: true }
       },
       {
-        path: 'reports',
+        path: '/reports',
         name: 'reports',
         component: () => import('../views/ReportsView.vue'),
         meta: { title: 'Reports', requiresAuth: true }
       },
       {
-        path: 'settings',
+        path: '/settings',
         name: 'settings',
         component: SettingsView,
         meta: { title: 'Settings', requiresAuth: true }
       },
       {
-        path: 'admin/seed',
+        path: '/admin/seed',
         name: 'admin-seed',
         component: () => import('../components/admin/DatabaseSeedingView.vue'),
-        meta: { title: 'Database Seeding', requiresAuth: true }
+        meta: { title: 'Database Seeding', requiresAuth: true, requiresOwner: true }
       }
     ]
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/dashboard'
+    redirect: '/'
   }
 ];
 
@@ -155,6 +157,12 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
 
+  const requiresOwner = to.matched.some(record => record.meta.requiresOwner);
+  if (requiresOwner && !authStore.isOwner) {
+    next({ name: 'dashboard' });
+    return;
+  }
+
   // If user is authenticated and tries to access login, redirect to dashboard
   if ((to.name === 'login' || to.name === 'forgot-password') && authStore.isAuthenticated) {
     next({ name: 'dashboard' });
@@ -162,7 +170,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Update page title
-  document.title = to.meta.title ? `${to.meta.title} | K3 Oxygen` : 'K3 Oxygen';
+  if (to.name !== 'public-gym-profile') document.title = to.meta.title ? `${to.meta.title} | K3 Oxygen` : 'K3 Oxygen';
 
   next();
 });

@@ -1,9 +1,10 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import InputSwitch from 'primevue/inputswitch';
 import InputText from 'primevue/inputtext';
+import InputTextarea from 'primevue/textarea';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 
@@ -21,6 +22,7 @@ import {
 } from '../services/firebase/messageService';
 import { useAuthStore } from '../stores/authStore';
 import { useGymStore } from '../stores/gymStore';
+import { getPublicGymProfileForGym, isValidGymSlug, normaliseGymSlug, savePublicGymProfile } from '../services/firebase/publicGymProfileService';
 import { formatCurrency } from '../utils/formatters';
 
 const authStore = useAuthStore();
@@ -34,6 +36,13 @@ const templateDialogVisible = ref(false);
 const editingTemplate = ref(null);
 const ptPlanDialogVisible = ref(false);
 const editingPtPlan = ref(null);
+const profileSaving = ref(false);
+const savedProfileSlug = ref('');
+const landingPageUrl = `${window.location.origin}/`;
+const facilityName = ref('');
+const publicProfile = reactive({ name: '', slug: '', tagline: '', description: '', phone: '', email: '', address: '', city: '', state: '', pincode: '', googleMapsUrl: '', website: '', instagram: '', facebook: '', ownerName: '', ownerDesignation: '', ownerIntroduction: '', facilities: [], openingHours: {}, publicProfileEnabled: true });
+const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const profileUrl = computed(() => landingPageUrl);
 const settings = reactive({ provider: 'MOCK', channel: MESSAGE_CHANNEL.WHATSAPP, enabled: true, reminderDays: [7, 3, 1], sendOnExpiry: false, paymentReminders: true, defaultSender: '', batchSize: 10, maxRetries: 2 });
 
 const defaultTemplates = [
@@ -56,6 +65,56 @@ async function load() {
     toast.add({ severity: 'error', summary: 'Settings unavailable', detail: error.message, life: 4000 });
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadPublicProfile() {
+  if (!authStore.gymId) return;
+  const fallbackName = authStore.userProfile?.gymName || 'My Gym';
+  const fallbackSlug = normaliseGymSlug(fallbackName);
+  try {
+    const savedProfile = await getPublicGymProfileForGym(authStore.gymId);
+    Object.assign(publicProfile, { name: fallbackName, slug: fallbackSlug, facilities: [], openingHours: {}, publicProfileEnabled: true, ...(savedProfile || {}) });
+    savedProfileSlug.value = savedProfile?.slug || '';
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gym profile unavailable', detail: error.message, life: 4000 });
+  }
+}
+
+function addFacility() {
+  const name = facilityName.value.trim();
+  if (!name || publicProfile.facilities.some((facility) => facility.name.toLowerCase() === name.toLowerCase())) return;
+  publicProfile.facilities.push({ name, icon: 'star' });
+  facilityName.value = '';
+}
+
+async function saveGymProfile() {
+  publicProfile.slug = normaliseGymSlug(publicProfile.slug);
+  if (!publicProfile.name.trim() || !isValidGymSlug(publicProfile.slug)) {
+    toast.add({ severity: 'warn', summary: 'Check your profile', detail: 'Gym name and a valid lowercase URL slug are required.', life: 3500 });
+    return;
+  }
+  profileSaving.value = true;
+  try {
+    savedProfileSlug.value = await savePublicGymProfile(authStore.gymId, { ...publicProfile }, savedProfileSlug.value);
+    toast.add({ severity: 'success', summary: 'Gym profile saved', detail: 'Your public profile is ready to share.', life: 3000 });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Profile not saved', detail: error.message, life: 4000 });
+  } finally {
+    profileSaving.value = false;
+  }
+}
+
+function previewPublicProfile() {
+  window.open('/', '_blank', 'noopener');
+}
+
+async function copyProfileLink() {
+  try {
+    await navigator.clipboard.writeText(profileUrl.value);
+    toast.add({ severity: 'success', summary: 'Link copied', detail: 'Your public profile link is ready to share.', life: 2500 });
+  } catch {
+    toast.add({ severity: 'warn', summary: 'Copy unavailable', detail: 'Copy the public profile URL from the field.', life: 3500 });
   }
 }
 
@@ -137,12 +196,22 @@ function togglePtPlan(plan) {
   });
 }
 
-onMounted(load);
+onMounted(() => { load(); loadPublicProfile(); });
 </script>
 
 <template>
   <section class="stack-16 messaging-settings">
     <PageHeader title="Settings" subtitle="Configure gym-specific messaging, reminders, and templates." />
+
+    <div class="panel-card stack-16 public-profile-settings">
+      <div class="panel-card__header"><div><p class="panel-card__eyebrow">Gym Profile</p><h3 class="panel-card__title">Your public visitor page</h3></div><InputSwitch v-model="publicProfile.publicProfileEnabled" :disabled="!authStore.isOwner" /></div>
+      <p class="settings-empty-copy">Only these fields are published. Private member, payment, attendance, and staff data are never included.</p>
+      <div class="public-profile-url"><div><span>Public landing page</span><strong>{{ profileUrl }}</strong></div><div class="table-actions"><Button icon="pi pi-copy" text aria-label="Copy public profile link" title="Copy public profile link" @click="copyProfileLink" /><Button label="Preview Profile" icon="pi pi-external-link" outlined @click="previewPublicProfile" /></div></div>
+      <div class="public-profile-fields"><label class="app-field"><span>Gym Name *</span><InputText v-model="publicProfile.name" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Profile URL slug *</span><InputText v-model="publicProfile.slug" placeholder="ironfit-fitness" :disabled="!authStore.isOwner" @blur="publicProfile.slug = normaliseGymSlug(publicProfile.slug)" /><small>Lowercase letters, numbers, and hyphens only.</small></label><label class="app-field"><span>Public phone</span><InputText v-model="publicProfile.phone" :disabled="!authStore.isOwner" /></label><label class="app-field public-profile-fields__wide"><span>Tagline</span><InputText v-model="publicProfile.tagline" :disabled="!authStore.isOwner" /></label><label class="app-field public-profile-fields__wide"><span>About the gym</span><InputTextarea v-model="publicProfile.description" rows="3" auto-resize :disabled="!authStore.isOwner" /></label><label class="app-field public-profile-fields__wide"><span>Address</span><InputText v-model="publicProfile.address" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>City</span><InputText v-model="publicProfile.city" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>State</span><InputText v-model="publicProfile.state" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Pincode</span><InputText v-model="publicProfile.pincode" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Google Maps URL</span><InputText v-model="publicProfile.googleMapsUrl" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Website</span><InputText v-model="publicProfile.website" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Instagram URL</span><InputText v-model="publicProfile.instagram" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Facebook URL</span><InputText v-model="publicProfile.facebook" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Owner name</span><InputText v-model="publicProfile.ownerName" :disabled="!authStore.isOwner" /></label><label class="app-field"><span>Owner designation</span><InputText v-model="publicProfile.ownerDesignation" placeholder="Founder & Owner" :disabled="!authStore.isOwner" /></label><label class="app-field public-profile-fields__wide"><span>Owner introduction</span><InputTextarea v-model="publicProfile.ownerIntroduction" rows="2" auto-resize :disabled="!authStore.isOwner" /></label></div>
+      <div class="profile-subsection"><p class="panel-card__eyebrow">Facilities</p><div class="facility-editor"><InputText v-model="facilityName" placeholder="e.g. Functional Training" :disabled="!authStore.isOwner" @keyup.enter="addFacility" /><Button icon="pi pi-plus" aria-label="Add facility" title="Add facility" :disabled="!authStore.isOwner" @click="addFacility" /></div><div class="facility-tags"><span v-for="(facility, index) in publicProfile.facilities" :key="`${facility.name}-${index}`">{{ facility.name }}<button :disabled="!authStore.isOwner" :aria-label="`Remove ${facility.name}`" @click="publicProfile.facilities.splice(index, 1)"><i class="pi pi-times" /></button></span></div></div>
+      <div class="profile-subsection"><p class="panel-card__eyebrow">Opening Hours</p><div class="hours-editor"><label v-for="day in weekdays" :key="day"><span>{{ day }}</span><InputText v-model="publicProfile.openingHours[day]" placeholder="6:00 AM - 10:00 PM or Closed" :disabled="!authStore.isOwner" /></label></div></div>
+      <div class="table-actions"><Button label="Save Changes" icon="pi pi-check" :loading="profileSaving" :disabled="!authStore.isOwner" @click="saveGymProfile" /><small v-if="!authStore.isOwner">Only gym owners can update the public profile.</small></div>
+    </div>
 
     <div class="settings-section-grid">
       <div class="panel-card stack-16">
@@ -188,3 +257,7 @@ onMounted(load);
     <PersonalTrainingPlanDialog v-model:visible="ptPlanDialogVisible" :plan="editingPtPlan" @save="savePtPlan" />
   </section>
 </template>
+
+<style scoped>
+.public-profile-settings{border-top:4px solid var(--color-violet)}.public-profile-url{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px;border:1px solid var(--border-soft);border-radius:var(--radius-input);background:var(--bg-card-soft)}.public-profile-url span,.public-profile-url strong{display:block}.public-profile-url span{color:var(--text-muted);font-size:.68rem;font-weight:800;text-transform:uppercase}.public-profile-url strong{margin-top:3px;color:var(--primary-strong);font-size:.8rem;overflow-wrap:anywhere}.public-profile-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.public-profile-fields__wide{grid-column:span 3}.public-profile-fields small{margin-top:4px;color:var(--text-muted);font-size:.68rem}.profile-subsection{padding-top:16px;border-top:1px solid var(--border-soft)}.facility-editor{display:flex;gap:8px;max-width:420px;margin-top:10px}.facility-editor :deep(.p-inputtext){flex:1}.facility-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.facility-tags span{display:inline-flex;align-items:center;gap:5px;padding:5px 7px 5px 10px;border-radius:var(--radius-pill);background:var(--tint-violet);color:var(--color-violet);font-size:.75rem;font-weight:800}.facility-tags button{padding:0;border:0;background:transparent;color:inherit;cursor:pointer}.hours-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin-top:10px}.hours-editor label{display:grid;grid-template-columns:100px 1fr;align-items:center;gap:8px;color:var(--text-muted);font-size:.78rem;font-weight:800}@media(max-width:800px){.public-profile-fields{grid-template-columns:1fr 1fr}.public-profile-fields__wide{grid-column:span 2}.hours-editor{grid-template-columns:1fr}.public-profile-url{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.public-profile-fields{grid-template-columns:1fr}.public-profile-fields__wide{grid-column:span 1}.hours-editor label{grid-template-columns:1fr}}
+</style>

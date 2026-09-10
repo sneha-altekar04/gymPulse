@@ -10,20 +10,25 @@
 
       <template #content>
         <div class="seed-content">
+          <div v-if="!canSeed" class="error-message">
+            <i class="pi pi-exclamation-triangle"></i>
+            <p>Only gym owners can seed collections.</p>
+          </div>
+
           <div v-if="!seedingComplete" class="seed-form">
             <div class="form-group">
               <label>Gym ID</label>
               <InputText 
                 v-model="gymId" 
                 placeholder="e.g., demo-gym-001"
-                :disabled="isSeeding"
+                :disabled="isSeeding || !canSeed"
               />
             </div>
 
             <Button 
               @click="seedDatabase"
               :loading="isSeeding"
-              :disabled="!gymId || isSeeding"
+              :disabled="!gymId || isSeeding || !canSeed"
               class="seed-button"
             >
               <i v-if="!isSeeding" class="pi pi-check"></i>
@@ -80,22 +85,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { seedDatabase as seedData } from '../../firebase/seedDatabase';
+import { computed, ref, watch } from 'vue';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import { useToast } from 'primevue/usetoast';
 
+import { auth } from '../../firebase/firebase';
+import { useAuthStore } from '../../stores/authStore';
+
 const toast = useToast();
+const authStore = useAuthStore();
 
 const gymId = ref('demo-gym-001');
 const isSeeding = ref(false);
 const seedingComplete = ref(false);
 const docCount = ref(0);
 const error = ref('');
+const canSeed = computed(() => authStore.isOwner);
+
+watch(() => authStore.gymId, (value) => {
+  if (value) gymId.value = value;
+}, { immediate: true });
 
 const seedDatabase = async () => {
+  if (!canSeed.value) {
+    error.value = 'Only gym owners can seed the database.';
+    return;
+  }
+
   if (!gymId.value.trim()) {
     error.value = 'Please enter a Gym ID';
     return;
@@ -105,10 +123,25 @@ const seedDatabase = async () => {
   error.value = '';
 
   try {
-    const result = await seedData('gympulse-afcb1', gymId.value);
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Your session expired. Please log in again.');
+
+    const idToken = await currentUser.getIdToken(true);
+    const response = await fetch('/api/admin/seed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`
+      },
+      body: JSON.stringify({ gymId: gymId.value.trim() })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Seeding failed.');
+
     docCount.value = result.documentsAdded;
     seedingComplete.value = true;
-    
+
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -117,7 +150,7 @@ const seedDatabase = async () => {
     });
   } catch (err) {
     error.value = `Seeding failed: ${err.message}`;
-    
+
     toast.add({
       severity: 'error',
       summary: 'Error',

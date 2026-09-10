@@ -13,6 +13,22 @@ service cloud.firestore {
         && request.resource.data.gymId == resource.data.gymId;
       allow delete: if false;
     }
+
+    match /publicGymProfiles/{slug} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && hasRole('OWNER')
+        && userBelongsToGym(request.resource.data.gymId)
+        && request.resource.data.slug == slug
+        && request.resource.data.keys().hasOnly(['gymId', 'name', 'slug', 'tagline', 'description', 'phone', 'email', 'address', 'city', 'state', 'pincode', 'googleMapsUrl', 'latitude', 'longitude', 'website', 'instagram', 'facebook', 'ownerName', 'ownerDesignation', 'ownerIntroduction', 'facilities', 'openingHours', 'publicProfileEnabled', 'createdAt', 'updatedAt']);
+      allow update: if request.auth != null
+        && hasRole('OWNER')
+        && resource.data.gymId == request.resource.data.gymId
+        && userBelongsToGym(resource.data.gymId)
+        && request.resource.data.slug == slug
+        && request.resource.data.keys().hasOnly(['gymId', 'name', 'slug', 'tagline', 'description', 'phone', 'email', 'address', 'city', 'state', 'pincode', 'googleMapsUrl', 'latitude', 'longitude', 'website', 'instagram', 'facebook', 'ownerName', 'ownerDesignation', 'ownerIntroduction', 'facilities', 'openingHours', 'publicProfileEnabled', 'createdAt', 'updatedAt']);
+      allow delete: if request.auth != null && hasRole('OWNER') && userBelongsToGym(resource.data.gymId);
+    }
     
     match /gyms/{gymId} {
       // Only allow authenticated users

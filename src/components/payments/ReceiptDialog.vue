@@ -41,8 +41,8 @@ function printReceipt() {
     <div v-if="receipt" class="receipt-card print-zone">
       <div class="receipt-head">
         <div>
-          <h3>GymPulse Fitness Club</h3>
-          <p>Balewadi High Street, Pune, Maharashtra</p>
+          <h3>K3 Oxygen Gym</h3>
+          <p>Fish Market Rd, Ziral Ali, Pen, Maharashtra 402107</p>
         </div>
         <div class="receipt-meta">
           <p><strong>Receipt:</strong> {{ receipt.receiptNumber }}</p>

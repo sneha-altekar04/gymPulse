@@ -371,6 +371,36 @@ export const seedDatabase = async (projectId, gymId) => {
     const batch = writeBatch(db);
     let docCount = 0;
 
+    // This separate document deliberately excludes all private operations data.
+    const publicProfileRef = doc(db, 'publicGymProfiles', 'k3-oxygen');
+    batch.set(publicProfileRef, {
+      name: 'K3 Oxygen',
+      slug: 'k3-oxygen',
+      tagline: 'Your space to move, train and grow.',
+      description: 'A welcoming fitness space for strength, movement, and lasting progress.',
+      city: 'Pune',
+      state: 'Maharashtra',
+      facilities: [
+        { name: 'Strength Training', icon: 'bolt' },
+        { name: 'Cardio', icon: 'heart' },
+        { name: 'Personal Training', icon: 'user' }
+      ],
+      openingHours: {
+        Monday: '6:00 AM - 10:00 PM',
+        Tuesday: '6:00 AM - 10:00 PM',
+        Wednesday: '6:00 AM - 10:00 PM',
+        Thursday: '6:00 AM - 10:00 PM',
+        Friday: '6:00 AM - 10:00 PM',
+        Saturday: '6:00 AM - 10:00 PM',
+        Sunday: '7:00 AM - 1:00 PM'
+      },
+      publicProfileEnabled: true,
+      gymId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    docCount++;
+
     // 1. Add Trainers
     console.log('📝 Seeding trainers...');
     for (let i = 0; i < trainersSeed.length; i++) {

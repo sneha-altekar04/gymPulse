@@ -158,7 +158,7 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, #142b62 0%, #101f48 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
@@ -251,14 +251,15 @@ async function handleLogin() {
   font-size: 14px;
   font-weight: 600;
   border-radius: 6px;
-  background: #4f46e5;
+  background: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
   border: none;
+  color: #10264d;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 :deep(.p-button:hover) {
-  background: #4f46e5;
+  background: linear-gradient(135deg, #bef264 0%, #a3e635 100%);
 }
 
 :deep(.p-button:disabled) {

@@ -64,7 +64,7 @@ Example config (looks like this):
 ```env
 VITE_FIREBASE_API_KEY=AIzaSyDemoKeyForDevelopment
 VITE_FIREBASE_AUTH_DOMAIN=gympulse-demo.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=gympulse-demo
+VITE_FIREBASE_PROJECT_ID=gympulse-afcb1
 VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
 

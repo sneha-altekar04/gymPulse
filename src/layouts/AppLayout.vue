@@ -99,7 +99,7 @@ async function handleLogout() {
       detail: 'You have been successfully logged out.',
       life: 3000
     });
-    router.push({ name: 'login' });
+    router.push({ name: 'public-gym-profile' });
   } catch (error) {
     toast.add({
       severity: 'error',
