@@ -2,6 +2,7 @@ import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 import { subscribeToAuthState, logoutUser } from '../firebase/auth';
 import { getDocument } from '../firebase/firestore';
+import { hasPermission } from '../constants/permissions';
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref(null);
@@ -10,11 +11,13 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref(null);
 
   // Computed
-  const isAuthenticated = computed(() => !!currentUser.value);
+  const isActive = computed(() => userProfile.value?.active !== false);
+  const isAuthenticated = computed(() => !!currentUser.value && !!userProfile.value && isActive.value);
   const isOwner = computed(() => userProfile.value?.role === 'OWNER');
   const isManager = computed(() => userProfile.value?.role === 'MANAGER');
   const isReceptionist = computed(() => userProfile.value?.role === 'RECEPTIONIST');
   const gymId = computed(() => userProfile.value?.gymId);
+  const can = (permission) => hasPermission(userProfile.value?.role, permission);
 
   /**
    * Initialize auth state on app load
@@ -30,7 +33,17 @@ export const useAuthStore = defineStore('auth', () => {
           try {
             // Load user profile from Firestore
             const profile = await getDocument('users', user.uid);
-            userProfile.value = profile;
+            if (!profile) {
+              throw new Error('User profile not found. Please contact support.');
+            }
+            if (profile.active === false) {
+              await logoutUser();
+              clearAuth();
+              error.value = 'Your account is inactive. Please contact the gym owner.';
+            } else {
+              userProfile.value = profile;
+              error.value = null;
+            }
           } catch (err) {
             console.error('Failed to load user profile:', err);
             error.value = 'Failed to load user profile';
@@ -49,6 +62,8 @@ export const useAuthStore = defineStore('auth', () => {
    * Set current user and profile
    */
   function setUser(user, profile) {
+    if (!profile) throw new Error('User profile not found. Please contact support.');
+    if (profile.active === false) throw new Error('Your account is inactive. Please contact the gym owner.');
     currentUser.value = user;
     userProfile.value = profile;
     loading.value = false;
@@ -81,10 +96,12 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     isAuthenticated,
+    isActive,
     isOwner,
     isManager,
     isReceptionist,
     gymId,
+    can,
     initializeAuth,
     setUser,
     clearAuth,

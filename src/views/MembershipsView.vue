@@ -12,12 +12,15 @@ import RenewMembershipDialog from '../components/members/RenewMembershipDialog.v
 import StatCard from '../components/common/StatCard.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { useGymStore } from '../stores/gymStore';
+import { useAuthStore } from '../stores/authStore';
+import { PERMISSION } from '../constants/permissions';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const gymStore = useGymStore();
+const authStore = useAuthStore();
 
 const searchText = ref('');
 const selectedStatus = ref(typeof route.query.status === 'string' ? route.query.status : 'ALL');
@@ -100,14 +103,19 @@ function sendReminder(record) {
   router.push({ path: '/messages', query: { compose: '1', memberId: record.memberId } });
 }
 
-function renewMembership(payload) {
-  gymStore.renewMembership(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Membership renewed',
-    detail: 'Renewal saved as a new membership record.',
-    life: 2600
-  });
+async function renewMembership(payload) {
+  try {
+    await gymStore.renewMembership(payload);
+    renewVisible.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Membership renewed',
+      detail: 'Renewal saved as a new membership record.',
+      life: 2600
+    });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Renewal failed', detail: error.message, life: 4000 });
+  }
 }
 </script>
 
@@ -116,7 +124,7 @@ function renewMembership(payload) {
     <PageHeader title="Memberships" subtitle="Track active and historical membership records">
       <template #actions>
         <Button label="Performance Report" icon="pi pi-chart-bar" text @click="router.push({ path: '/reports', query: { report: 'MEMBERSHIP_PERFORMANCE' } })" />
-        <Button label="Membership Plans" icon="pi pi-list" severity="secondary" @click="router.push('/memberships/plans')" />
+        <Button v-if="authStore.can(PERMISSION.MANAGE_PLANS)" label="Membership Plans" icon="pi pi-list" severity="secondary" @click="router.push('/memberships/plans')" />
       </template>
     </PageHeader>
 
@@ -167,7 +175,7 @@ function renewMembership(payload) {
               <td class="table-actions">
                 <Button icon="pi pi-user" text aria-label="View member" title="View member" @click="router.push(`/members/${record.memberId}`)" />
                 <Button
-                  v-if="record.daysRemaining <= 7"
+                  v-if="record.daysRemaining <= 7 && authStore.can(PERMISSION.SEND_MESSAGES)"
                   icon="pi pi-send"
                   text
                   :aria-label="record.daysRemaining < 0 ? 'Send renewal message' : 'Send expiry reminder'"
@@ -175,7 +183,7 @@ function renewMembership(payload) {
                   v-tooltip.top="record.daysRemaining < 0 ? 'Send renewal message' : 'Send expiry reminder'"
                   @click="sendReminder(record)"
                 />
-                <Button icon="pi pi-refresh" text aria-label="Renew membership" title="Renew membership" @click="openRenew(record)" />
+                <Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" icon="pi pi-refresh" text aria-label="Renew membership" title="Renew membership" @click="openRenew(record)" />
               </td>
             </tr>
           </tbody>

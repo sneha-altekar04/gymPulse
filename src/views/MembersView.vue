@@ -17,6 +17,8 @@ import RecordPaymentDialog from '../components/payments/RecordPaymentDialog.vue'
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { MEMBER_STATUS } from '../constants/domain';
 import { useGymStore } from '../stores/gymStore';
+import { useAuthStore } from '../stores/authStore';
+import { PERMISSION } from '../constants/permissions';
 import { formatDate } from '../utils/formatters';
 
 const router = useRouter();
@@ -24,6 +26,7 @@ const route = useRoute();
 const toast = useToast();
 const confirm = useConfirm();
 const gymStore = useGymStore();
+const authStore = useAuthStore();
 
 const searchText = ref('');
 const initialStatus =
@@ -79,6 +82,7 @@ const actionItems = computed(() => [
   {
     label: 'Edit Member',
     icon: 'pi pi-pencil',
+    permission: PERMISSION.MANAGE_MEMBERS,
     command: () => activeMember.value && router.push(`/members/${activeMember.value.id}/edit`)
   },
   {
@@ -89,6 +93,7 @@ const actionItems = computed(() => [
   {
     label: 'Renew Membership',
     icon: 'pi pi-refresh',
+    permission: PERMISSION.MANAGE_MEMBERSHIPS,
     command: () => {
       if (activeMember.value) {
         renewVisible.value = true;
@@ -98,6 +103,7 @@ const actionItems = computed(() => [
   {
     label: 'Record Payment',
     icon: 'pi pi-wallet',
+    permission: PERMISSION.RECORD_PAYMENTS,
     command: () => {
       if (activeMember.value) {
         paymentVisible.value = true;
@@ -107,12 +113,14 @@ const actionItems = computed(() => [
   ...(['ACTIVE', 'EXPIRING SOON', 'EXPIRED'].includes(activeMember.value?.membershipStatus) ? [{
     label: activeMember.value?.membershipStatus === 'EXPIRED' ? 'Send Renewal Message' : 'Send Reminder',
     icon: 'pi pi-send',
+    permission: PERMISSION.SEND_MESSAGES,
     command: () => activeMember.value && router.push({ path: '/messages', query: { compose: '1', memberId: activeMember.value.id } })
   }] : []),
-  { separator: true },
+  { separator: true, permission: PERMISSION.MANAGE_MEMBERS },
   {
     label: 'Deactivate Member',
     icon: 'pi pi-ban',
+    permission: PERMISSION.MANAGE_MEMBERS,
     command: () => {
       if (!activeMember.value) return;
       const member = activeMember.value;
@@ -131,6 +139,7 @@ const actionItems = computed(() => [
   {
     label: 'Delete Member',
     icon: 'pi pi-trash',
+    permission: PERMISSION.MANAGE_MEMBERS,
     command: () => {
       if (!activeMember.value) return;
       const member = activeMember.value;
@@ -146,7 +155,7 @@ const actionItems = computed(() => [
       });
     }
   }
-]);
+].filter((item) => !item.permission || authStore.can(item.permission)));
 
 const filteredMembers = computed(() => {
   const search = searchText.value.trim().toLowerCase();
@@ -233,24 +242,34 @@ function onPageChange(event) {
   rows.value = event.rows;
 }
 
-function onRenew(payload) {
-  gymStore.renewMembership(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Membership renewed',
-    detail: 'A new membership record has been created successfully.',
-    life: 2600
-  });
+async function onRenew(payload) {
+  try {
+    await gymStore.renewMembership(payload);
+    renewVisible.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Membership renewed',
+      detail: 'A new membership record has been created successfully.',
+      life: 2600
+    });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Renewal failed', detail: error.message, life: 4000 });
+  }
 }
 
-function onRecordPayment(payload) {
-  gymStore.recordPayment(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Payment recorded',
-    detail: 'Member payment has been captured in the receipt log.',
-    life: 2600
-  });
+async function onRecordPayment(payload) {
+  try {
+    await gymStore.recordPayment(payload);
+    paymentVisible.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Payment recorded',
+      detail: 'Member payment has been captured in the receipt log.',
+      life: 2600
+    });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Payment failed', detail: error.message, life: 4000 });
+  }
 }
 </script>
 
@@ -258,7 +277,7 @@ function onRecordPayment(payload) {
   <section class="stack-16 module-members">
     <PageHeader title="Members" subtitle="Manage your gym community and memberships.">
       <template #actions>
-        <Button label="Add Member" icon="pi pi-plus" @click="router.push('/members/new')" />
+        <Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERS)" label="Add Member" icon="pi pi-plus" @click="router.push('/members/new')" />
       </template>
     </PageHeader>
 

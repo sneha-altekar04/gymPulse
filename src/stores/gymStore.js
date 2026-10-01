@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useAuthStore } from './authStore';
@@ -7,6 +7,8 @@ import { ATTENDANCE_SOURCE, MEMBER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, PERSO
 import { createPersonalTrainingPlan, setPersonalTrainingPlanStatus, updatePersonalTrainingPlan } from '../services/firebase/personalTrainingPlanService';
 import { createPersonalTrainingSubscription, updatePersonalTrainingSubscription } from '../services/firebase/personalTrainingService';
 import { allocatePayment, calculatePurchaseTotals, calculateSubscriptionEndDate } from '../utils/purchaseCalculations';
+import { recordPaymentTransaction } from '../services/firebase/paymentTransactionService';
+import { PERMISSION } from '../constants/permissions';
 
 function normalizeTimestamp(value) {
   if (!value) return null;
@@ -83,8 +85,29 @@ export const useGymStore = defineStore('gym', () => {
   const loading = ref(false);
   const dataLoaded = ref(false);
 
+  function resetData() {
+    members.value = [];
+    trainers.value = [];
+    membershipPlans.value = [];
+    personalTrainingPlans.value = [];
+    personalTrainingSubscriptions.value = [];
+    memberships.value = [];
+    attendance.value = [];
+    payments.value = [];
+    dataLoaded.value = false;
+    loading.value = false;
+  }
+
+  watch(() => authStore.gymId, (gymId, previousGymId) => {
+    if (!gymId || (previousGymId && gymId !== previousGymId)) resetData();
+  });
+
   function getGymId() {
     return authStore.gymId;
+  }
+
+  function assertPermission(permission) {
+    if (!authStore.can(permission)) throw new Error('You do not have permission to perform this action.');
   }
 
   async function loadData() {
@@ -361,6 +384,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function addMember(payload) {
+    assertPermission(PERMISSION.MANAGE_MEMBERS);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const memberCode = generateMemberCode();
@@ -444,6 +468,7 @@ export const useGymStore = defineStore('gym', () => {
     if (totals.amountPaid > 0) {
       const receiptNumber = generateReceiptNumber();
       const payData = {
+        gymId,
         memberId,
         membershipId,
         receiptNumber,
@@ -468,6 +493,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updateMember(memberId, payload) {
+    assertPermission(PERMISSION.MANAGE_MEMBERS);
     const gymId = getGymId();
     const updateData = {
       fullName: payload.fullName,
@@ -493,6 +519,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function renewMembership(payload) {
+    assertPermission(PERMISSION.MANAGE_MEMBERSHIPS);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const plan = plansById.value[payload.planId];
@@ -536,6 +563,7 @@ export const useGymStore = defineStore('gym', () => {
     if (totals.amountPaid > 0) {
       const receiptNumber = generateReceiptNumber();
       const payData = {
+        gymId,
         memberId: payload.memberId,
         membershipId,
         receiptNumber,
@@ -560,54 +588,36 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function recordPayment(payload) {
+    assertPermission(PERMISSION.RECORD_PAYMENTS);
     const gymId = getGymId();
-    const now = new Date().toISOString();
     const membership = memberships.value.find((r) => r.id === payload.membershipId);
-    if (!membership) return null;
+    if (!membership) throw new Error('Membership not found. Refresh and try again.');
 
-    const member = membersDetailed.value.find((entry) => entry.id === payload.memberId);
-    const paymentAllocation = allocatePayment(payload.amount, member?.membershipOutstanding || 0, member?.personalTrainingOutstanding || 0);
-    const newAmountPaid = (membership.amountPaid || 0) + Number(payload.amount);
-    const newMembershipAmountPaid = Number(membership.membershipAmountPaid ?? membership.amountPaid ?? 0) + paymentAllocation.membershipAmount;
-    await updateDocument(`gyms/${gymId}/memberships`, payload.membershipId, {
-      amountPaid: newAmountPaid,
-      pendingAmount: Math.max(Number(membership.totalAmount ?? membership.finalAmount ?? 0) - newAmountPaid, 0),
-      membershipAmountPaid: newMembershipAmountPaid
+    const openSubscriptions = getMemberPersonalTraining(payload.memberId)
+      .filter((subscription) => subscription.pendingAmount > 0)
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    const result = await recordPaymentTransaction({
+      gymId,
+      payload,
+      subscriptionIds: openSubscriptions.map((subscription) => subscription.id),
+      userId: authStore.currentUser?.uid,
+      minimumSequence: payments.value.reduce((max, payment) => {
+        const match = /^GYM-(\d{4})-(\d+)$/.exec(payment.receiptNumber || '');
+        return match && Number(match[1]) === new Date().getFullYear() ? Math.max(max, Number(match[2])) : max;
+      }, 0)
     });
-    membership.amountPaid = newAmountPaid;
-    membership.updatedAt = now;
-    membership.membershipAmountPaid = newMembershipAmountPaid;
 
-    let remainingPtPayment = paymentAllocation.personalTrainingAmount;
-    const openSubscriptions = getMemberPersonalTraining(payload.memberId).filter((subscription) => subscription.pendingAmount > 0);
-    for (const subscription of openSubscriptions) {
-      if (remainingPtPayment <= 0) break;
-      const applied = Math.min(remainingPtPayment, subscription.pendingAmount);
-      subscription.amountPaid = Number(subscription.amountPaid || 0) + applied;
-      remainingPtPayment -= applied;
-      await updatePersonalTrainingSubscription(gymId, subscription.id, { amountPaid: subscription.amountPaid }, authStore.currentUser?.uid);
-    }
-
-    const receiptNumber = generateReceiptNumber();
-    const payData = {
-      memberId: payload.memberId,
-      membershipId: payload.membershipId,
-      receiptNumber,
-      membershipAmount: paymentAllocation.membershipAmount,
-      personalTrainingAmount: paymentAllocation.personalTrainingAmount,
-      amount: Number(payload.amount),
-      paymentMode: payload.paymentMode,
-      status: getStatusFromAmounts(membership.finalAmount, newAmountPaid),
-      paymentDate: payload.paymentDate,
-      notes: payload.notes || ''
-    };
-    const payId = await addDocument(`gyms/${gymId}/payments`, payData);
-    const paymentRecord = { id: payId, ...payData, createdAt: now };
-    payments.value.unshift(paymentRecord);
-    return paymentRecord;
+    Object.assign(membership, result.membershipUpdate);
+    result.subscriptionUpdates.forEach((update) => {
+      const subscription = personalTrainingSubscriptions.value.find((entry) => entry.id === update.id);
+      if (subscription) subscription.amountPaid = update.amountPaid;
+    });
+    payments.value.unshift(result.payment);
+    return result.payment;
   }
 
   async function addManualAttendance(payload) {
+    assertPermission(PERMISSION.MANAGE_ATTENDANCE);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const attData = {
@@ -624,6 +634,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updateManualAttendance(attendanceId, payload) {
+    assertPermission(PERMISSION.MANAGE_ATTENDANCE);
     const gymId = getGymId();
     const updateData = {
       memberId: payload.memberId,
@@ -648,6 +659,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function deleteManualAttendance(attendanceId) {
+    assertPermission(PERMISSION.MANAGE_ATTENDANCE);
     const gymId = getGymId();
     await deleteDocument(`gyms/${gymId}/attendance`, attendanceId);
     attendance.value = attendance.value.filter((entry) => entry.id !== attendanceId);
@@ -655,6 +667,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function createPlan(payload) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const planData = {
@@ -670,6 +683,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updatePlan(planId, payload) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     const updateData = {
       name: payload.name,
@@ -689,6 +703,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function togglePlanActive(planId) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     const target = membershipPlans.value.find((p) => p.id === planId);
     if (target) {
@@ -699,6 +714,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function createPtPlan(payload) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const planData = { ...payload, duration: Number(payload.duration), price: Number(payload.price), status: payload.status || PLAN_STATUS.ACTIVE };
@@ -707,6 +723,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updatePtPlan(planId, payload) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     await updatePersonalTrainingPlan(gymId, planId, payload, authStore.currentUser?.uid);
     const index = personalTrainingPlans.value.findIndex((plan) => plan.id === planId);
@@ -714,6 +731,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function togglePtPlanActive(planId) {
+    assertPermission(PERMISSION.MANAGE_PLANS);
     const gymId = getGymId();
     const plan = personalTrainingPlans.value.find((entry) => entry.id === planId);
     if (!plan) return;
@@ -723,6 +741,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updatePersonalTrainingStatus(subscriptionId, status) {
+    assertPermission(PERMISSION.MANAGE_MEMBERSHIPS);
     const gymId = getGymId();
     await updatePersonalTrainingSubscription(gymId, subscriptionId, { status }, authStore.currentUser?.uid);
     const subscription = personalTrainingSubscriptions.value.find((entry) => entry.id === subscriptionId);
@@ -730,6 +749,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function createTrainer(payload) {
+    assertPermission(PERMISSION.MANAGE_TRAINERS);
     const gymId = getGymId();
     const now = new Date().toISOString();
     const trainerData = {
@@ -746,6 +766,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function updateTrainer(trainerId, payload) {
+    assertPermission(PERMISSION.MANAGE_TRAINERS);
     const gymId = getGymId();
     const updateData = {
       fullName: payload.fullName,
@@ -766,6 +787,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function toggleTrainerStatus(trainerId) {
+    assertPermission(PERMISSION.MANAGE_TRAINERS);
     const gymId = getGymId();
     const trainer = trainers.value.find((t) => t.id === trainerId);
     if (trainer) {
@@ -776,6 +798,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function deactivateMember(memberId) {
+    assertPermission(PERMISSION.MANAGE_MEMBERS);
     const gymId = getGymId();
     await updateDocument(`gyms/${gymId}/members`, memberId, { status: 'INACTIVE' });
     const index = members.value.findIndex((m) => m.id === memberId);
@@ -785,6 +808,7 @@ export const useGymStore = defineStore('gym', () => {
   }
 
   async function deleteMember(memberId) {
+    assertPermission(PERMISSION.MANAGE_MEMBERS);
     const gymId = getGymId();
     await updateDocument(`gyms/${gymId}/members`, memberId, { status: 'DELETED' });
     members.value = members.value.filter((m) => m.id !== memberId);
@@ -801,6 +825,7 @@ export const useGymStore = defineStore('gym', () => {
     payments,
     loading,
     dataLoaded,
+    resetData,
     loadData,
     membersDetailed,
     membershipsDetailed,

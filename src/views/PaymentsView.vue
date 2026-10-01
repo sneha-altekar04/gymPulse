@@ -13,12 +13,15 @@ import ReceiptDialog from '../components/payments/ReceiptDialog.vue';
 import StatCard from '../components/common/StatCard.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { useGymStore } from '../stores/gymStore';
+import { useAuthStore } from '../stores/authStore';
+import { PERMISSION } from '../constants/permissions';
 import { formatCurrency, formatDate, formatPaymentMethod, toInputDate } from '../utils/formatters';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const gymStore = useGymStore();
+const authStore = useAuthStore();
 
 const recordDialogVisible = ref(false);
 const receiptDialogVisible = ref(false);
@@ -102,12 +105,17 @@ function openCompletePayment(payment) {
   recordDialogVisible.value = true;
 }
 
-function recordPayment(payload) {
-  const receipt = gymStore.recordPayment(payload);
-  toast.add({ severity: 'success', summary: 'Payment recorded', life: 2400 });
-  if (receipt && payload.showReceipt !== false) {
-    activeReceipt.value = gymStore.paymentsDetailed.find((entry) => entry.id === receipt.id) || null;
-    receiptDialogVisible.value = true;
+async function recordPayment(payload) {
+  try {
+    const receipt = await gymStore.recordPayment(payload);
+    recordDialogVisible.value = false;
+    toast.add({ severity: 'success', summary: 'Payment recorded', life: 2400 });
+    if (receipt && payload.showReceipt !== false) {
+      activeReceipt.value = gymStore.paymentsDetailed.find((entry) => entry.id === receipt.id) || null;
+      receiptDialogVisible.value = true;
+    }
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Payment failed', detail: error.message, life: 4000 });
   }
 }
 
@@ -121,7 +129,7 @@ function viewReceipt(payment) {
   <section class="stack-16">
     <PageHeader title="Payments" subtitle="Track collections, pending balances, and receipts">
       <template #actions>
-        <Button label="Record Payment" icon="pi pi-plus" @click="openRecordPaymentDialog" />
+        <Button v-if="authStore.can(PERMISSION.RECORD_PAYMENTS)" label="Record Payment" icon="pi pi-plus" @click="openRecordPaymentDialog" />
       </template>
     </PageHeader>
 

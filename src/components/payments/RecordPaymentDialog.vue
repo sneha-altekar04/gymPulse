@@ -107,8 +107,6 @@ function submit() {
     notes: form.notes,
     showReceipt: props.showReceipt
   });
-
-  close();
 }
 </script>
 

@@ -126,6 +126,10 @@ async function handleLogin() {
     if (!profile) {
       throw new Error('User profile not found. Please contact support.');
     }
+    if (profile.active === false) {
+      await authStore.logout();
+      throw new Error('Your account is inactive. Please contact the gym owner.');
+    }
 
     authStore.setUser(user, profile);
 

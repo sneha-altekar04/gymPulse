@@ -14,7 +14,7 @@ export async function requireMessagingUser(request) {
   const userSnapshot = await getAdminDb().doc(`users/${decodedToken.uid}`).get();
   const user = userSnapshot.data();
 
-  if (!user?.gymId || !ALLOWED_MESSAGING_ROLES.has(user.role)) {
+  if (!user?.gymId || user.active === false || !ALLOWED_MESSAGING_ROLES.has(user.role)) {
     const error = new Error('You do not have permission to send messages.');
     error.statusCode = 403;
     throw error;
@@ -45,7 +45,7 @@ export async function requireOwnerUser(request) {
   const userSnapshot = await getAdminDb().doc(`users/${decodedToken.uid}`).get();
   const user = userSnapshot.data();
 
-  if (!user?.gymId || user.role !== 'OWNER') {
+  if (!user?.gymId || user.active === false || user.role !== 'OWNER') {
     const error = new Error('You do not have permission to seed this database.');
     error.statusCode = 403;
     throw error;

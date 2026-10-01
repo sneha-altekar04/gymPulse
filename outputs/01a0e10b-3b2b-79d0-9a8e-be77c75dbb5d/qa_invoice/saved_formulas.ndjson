@@ -1,0 +1,3 @@
+{"kind":"formula","sheet":"Invoice","address":"H26","formula":"=SUM(H17:H24)"}
+{"kind":"formula","sheet":"Invoice","address":"H28","formula":"=H26+H27"}
+{"kind":"formula","sheet":"Invoice","address":"H30","formula":"=H28+H29"}

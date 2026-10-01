@@ -120,7 +120,6 @@ function submit() {
     amountPaid: Number(form.amountPaid || 0),
     paymentMode: form.paymentMode
   });
-  close();
 }
 </script>
 

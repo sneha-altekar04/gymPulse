@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:messaging": "node --test tests/messaging.test.js",
     "test:reports": "node --test tests/reporting.test.js",
-    "test:pt": "node --test tests/purchaseCalculations.test.js"
+    "test:pt": "node --test tests/purchaseCalculations.test.js",
+    "test:permissions": "node --test tests/permissions.test.js"
   },
   "dependencies": {
     "chart.js": "^4.5.1",

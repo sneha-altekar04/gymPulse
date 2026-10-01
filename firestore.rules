@@ -6,105 +6,111 @@ service cloud.firestore {
     
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid;
+      // User profiles, roles, and gym assignments are provisioned by the trusted Admin API.
+      allow create: if false;
       allow update: if request.auth != null
         && request.auth.uid == uid
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.gymId == resource.data.gymId;
+        && isActiveUser()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'gymId', 'active']);
       allow delete: if false;
     }
 
     match /publicGymProfiles/{slug} {
       allow read: if true;
       allow create: if request.auth != null
+        && isActiveUser()
         && hasRole('OWNER')
         && userBelongsToGym(request.resource.data.gymId)
         && request.resource.data.slug == slug
         && request.resource.data.keys().hasOnly(['gymId', 'name', 'slug', 'tagline', 'description', 'phone', 'email', 'address', 'city', 'state', 'pincode', 'googleMapsUrl', 'latitude', 'longitude', 'website', 'instagram', 'facebook', 'ownerName', 'ownerDesignation', 'ownerIntroduction', 'facilities', 'openingHours', 'publicProfileEnabled', 'createdAt', 'updatedAt']);
       allow update: if request.auth != null
+        && isActiveUser()
         && hasRole('OWNER')
         && resource.data.gymId == request.resource.data.gymId
         && userBelongsToGym(resource.data.gymId)
         && request.resource.data.slug == slug
         && request.resource.data.keys().hasOnly(['gymId', 'name', 'slug', 'tagline', 'description', 'phone', 'email', 'address', 'city', 'state', 'pincode', 'googleMapsUrl', 'latitude', 'longitude', 'website', 'instagram', 'facebook', 'ownerName', 'ownerDesignation', 'ownerIntroduction', 'facilities', 'openingHours', 'publicProfileEnabled', 'createdAt', 'updatedAt']);
-      allow delete: if request.auth != null && hasRole('OWNER') && userBelongsToGym(resource.data.gymId);
+      allow delete: if request.auth != null && isActiveUser() && hasRole('OWNER') && userBelongsToGym(resource.data.gymId);
     }
     
     match /gyms/{gymId} {
       // Only allow authenticated users
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && hasRole('OWNER');
+      allow read: if request.auth != null && isActiveUser() && userBelongsToGym(gymId);
+      allow write: if request.auth != null && isActiveUser() && userBelongsToGym(gymId) && hasRole('OWNER');
       
       // Members subcollection
       match /members/{memberId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId);
-        allow update: if request.auth != null && userBelongsToGym(gymId);
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow create, update: if canOperateGym(gymId);
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
       
       // Memberships subcollection
       match /memberships/{membershipId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId);
-        allow update: if request.auth != null && userBelongsToGym(gymId);
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow create, update: if canOperateGym(gymId);
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
       
       // Membership Plans subcollection
       match /membershipPlans/{planId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
-        allow update: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow create, update: if canManageGym(gymId);
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
 
       match /personalTrainingPlans/{planId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER') && request.resource.data.gymId == gymId;
-        allow update: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER') && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
+        allow read: if canReadGym(gymId);
+        allow create: if canManageGym(gymId) && request.resource.data.gymId == gymId;
+        allow update: if canManageGym(gymId) && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
         allow delete: if false;
       }
 
       match /personalTrainingSubscriptions/{subscriptionId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId) && request.resource.data.gymId == gymId;
-        allow update: if request.auth != null && userBelongsToGym(gymId) && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
+        allow read: if canReadGym(gymId);
+        allow create: if canOperateGym(gymId) && request.resource.data.gymId == gymId;
+        allow update: if canOperateGym(gymId) && resource.data.gymId == gymId && request.resource.data.gymId == gymId;
         allow delete: if false;
       }
       
       // Attendance subcollection
       match /attendance/{attendanceId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId);
-        allow update: if request.auth != null && userBelongsToGym(gymId);
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow create, update: if canWriteAttendance(gymId);
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
       
       // Payments subcollection
       match /payments/{paymentId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId);
-        allow update: if request.auth != null && userBelongsToGym(gymId);
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canOperateGym(gymId);
+        allow create: if canOperateGym(gymId)
+          && request.resource.data.gymId == gymId;
+        allow update: if canManageGym(gymId)
+          && resource.data.gymId == gymId
+          && request.resource.data.gymId == gymId;
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
       
       // Trainers subcollection
       match /trainers/{trainerId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow create: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
-        allow update: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
-        allow delete: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow create, update: if canManageGym(gymId);
+        allow delete: if canReadGym(gymId) && hasRole('OWNER');
       }
       
       // Settings subcollection
       match /settings/{settingId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
-        allow write: if request.auth != null && userBelongsToGym(gymId) && hasRole('OWNER');
+        allow read: if canReadGym(gymId);
+        allow write: if request.auth != null && isActiveUser() && userBelongsToGym(gymId) && hasRole('OWNER');
+      }
+
+      match /counters/{counterId} {
+        allow read, create, update: if canOperateGym(gymId);
+        allow delete: if false;
       }
 
       match /messageTemplates/{templateId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow read: if canOperateGym(gymId);
         allow create: if request.auth != null
           && userBelongsToGym(gymId)
           && hasRole('OWNER')
@@ -118,7 +124,7 @@ service cloud.firestore {
       }
 
       match /messageSettings/{settingId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow read: if canOperateGym(gymId);
         allow create, update: if request.auth != null
           && userBelongsToGym(gymId)
           && hasRole('OWNER')
@@ -127,18 +133,18 @@ service cloud.firestore {
       }
 
       match /messageCampaigns/{campaignId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow read: if canOperateGym(gymId);
         allow write: if false;
       }
 
       match /messageLogs/{messageId} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow read: if canOperateGym(gymId);
         allow write: if false;
       }
       
       // Daily Stats subcollection
       match /dailyStats/{date} {
-        allow read: if request.auth != null && userBelongsToGym(gymId);
+        allow read: if canReadGym(gymId);
         allow write: if false; // Only for Cloud Functions
       }
     }
@@ -148,10 +154,37 @@ service cloud.firestore {
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return userDoc.data.gymId == gymId;
     }
+
+    function isActiveUser() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return !userDoc.data.keys().hasAny(['active']) || userDoc.data.active == true;
+    }
     
     function hasRole(role) {
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return userDoc.data.role == role;
+    }
+
+
+    function hasAnyRole(roles) {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.role in roles;
+    }
+
+    function canReadGym(gymId) {
+      return request.auth != null && isActiveUser() && userBelongsToGym(gymId);
+    }
+
+    function canOperateGym(gymId) {
+      return canReadGym(gymId) && hasAnyRole(['OWNER', 'MANAGER', 'RECEPTIONIST']);
+    }
+
+    function canManageGym(gymId) {
+      return canReadGym(gymId) && hasAnyRole(['OWNER', 'MANAGER']);
+    }
+
+    function canWriteAttendance(gymId) {
+      return canReadGym(gymId) && hasAnyRole(['OWNER', 'MANAGER', 'RECEPTIONIST', 'TRAINER']);
     }
   }
 }

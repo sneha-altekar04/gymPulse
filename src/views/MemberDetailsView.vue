@@ -16,6 +16,7 @@ import { useGymStore } from '../stores/gymStore';
 import { useAuthStore } from '../stores/authStore';
 import { getMessageLogs, getMessageTemplates } from '../services/firebase/messageService';
 import { formatCurrency, formatDate, formatDateTime, formatDurationFromTimes, formatPaymentMethod, formatTime, daysRemainingFromDate } from '../utils/formatters';
+import { PERMISSION } from '../constants/permissions';
 
 const route = useRoute();
 const router = useRouter();
@@ -52,7 +53,7 @@ function timestampDate(value) {
 }
 
 async function loadMessages() {
-  if (!authStore.gymId) return;
+  if (!authStore.gymId || !authStore.can(PERMISSION.VIEW_MESSAGES)) return;
   try {
     [messageLogs.value, messageTemplates.value] = await Promise.all([
       getMessageLogs(authStore.gymId, { memberId: route.params.id, limit: 50 }),
@@ -63,24 +64,34 @@ async function loadMessages() {
   }
 }
 
-function renew(payload) {
-  gymStore.renewMembership(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Membership renewed',
-    detail: 'Renewal added as a new membership record.',
-    life: 2600
-  });
+async function renew(payload) {
+  try {
+    await gymStore.renewMembership(payload);
+    renewVisible.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Membership renewed',
+      detail: 'Renewal added as a new membership record.',
+      life: 2600
+    });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Renewal failed', detail: error.message, life: 4000 });
+  }
 }
 
-function recordPayment(payload) {
-  gymStore.recordPayment(payload);
-  toast.add({
-    severity: 'success',
-    summary: 'Payment recorded',
-    detail: 'Payment entry created and balance updated.',
-    life: 2600
-  });
+async function recordPayment(payload) {
+  try {
+    await gymStore.recordPayment(payload);
+    paymentVisible.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Payment recorded',
+      detail: 'Payment entry created and balance updated.',
+      life: 2600
+    });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Payment failed', detail: error.message, life: 4000 });
+  }
 }
 
 function completePayment() {
@@ -96,8 +107,8 @@ async function cancelPersonalTraining(subscription) {
 
 onMounted(() => {
   loadMessages();
-  if (route.query.action === 'renew') renewVisible.value = true;
-  if (route.query.action === 'payment') paymentVisible.value = true;
+  if (route.query.action === 'renew' && authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)) renewVisible.value = true;
+  if (route.query.action === 'payment' && authStore.can(PERMISSION.RECORD_PAYMENTS)) paymentVisible.value = true;
 });
 </script>
 
@@ -118,10 +129,10 @@ onMounted(() => {
 
         <div class="member-profile-top__actions">
           <Button label="Attendance Report" icon="pi pi-chart-line" text @click="router.push({ path: '/reports', query: { report: 'MEMBER_ATTENDANCE', memberId: member.id } })" />
-          <Button label="Send Message" icon="pi pi-send" severity="secondary" @click="messageVisible = true" />
-          <Button label="Renew Membership" icon="pi pi-refresh" @click="renewVisible = true" />
-          <Button label="Record Payment" icon="pi pi-wallet" severity="secondary" @click="completePayment" />
-          <Button label="Edit Member" icon="pi pi-pencil" text @click="router.push(`/members/${member.id}/edit`)" />
+          <Button v-if="authStore.can(PERMISSION.SEND_MESSAGES)" label="Send Message" icon="pi pi-send" severity="secondary" @click="messageVisible = true" />
+          <Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" label="Renew Membership" icon="pi pi-refresh" @click="renewVisible = true" />
+          <Button v-if="authStore.can(PERMISSION.RECORD_PAYMENTS)" label="Record Payment" icon="pi pi-wallet" severity="secondary" @click="completePayment" />
+          <Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERS)" label="Edit Member" icon="pi pi-pencil" text @click="router.push(`/members/${member.id}/edit`)" />
         </div>
       </div>
 
@@ -145,9 +156,9 @@ onMounted(() => {
 
       <div v-if="member.activePersonalTraining" class="pt-member-summary">
         <div><p class="panel-card__eyebrow">Personal Training</p><h3>{{ member.activePersonalTraining.planName }}</h3><p>Trainer: {{ member.activePersonalTraining.trainerName }}</p><p>{{ formatDate(member.activePersonalTraining.startDate) }} -> {{ formatDate(member.activePersonalTraining.endDate) }}</p></div>
-        <div><strong>{{ formatCurrency(member.activePersonalTraining.amount) }}</strong>&nbsp;&nbsp;&nbsp;&nbsp;<StatusBadge :status="member.activePersonalTraining.status" /><div class="table-actions"><Button label="View Trainer" icon="pi pi-user" text @click="router.push({ path: '/reports', query: { report: 'PT_TRAINER_PERFORMANCE', trainerId: member.activePersonalTraining.trainerId } })" /><Button label="Renew PT" icon="pi pi-refresh" text @click="renewVisible = true" /><Button label="Cancel PT" icon="pi pi-times" text severity="danger" @click="cancelPersonalTraining(member.activePersonalTraining)" /></div></div>
+        <div><strong>{{ formatCurrency(member.activePersonalTraining.amount) }}</strong>&nbsp;&nbsp;&nbsp;&nbsp;<StatusBadge :status="member.activePersonalTraining.status" /><div class="table-actions"><Button label="View Trainer" icon="pi pi-user" text @click="router.push({ path: '/reports', query: { report: 'PT_TRAINER_PERFORMANCE', trainerId: member.activePersonalTraining.trainerId } })" /><Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" label="Renew PT" icon="pi pi-refresh" text @click="renewVisible = true" /><Button v-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" label="Cancel PT" icon="pi pi-times" text severity="danger" @click="cancelPersonalTraining(member.activePersonalTraining)" /></div></div>
       </div>
-      <div v-else class="pt-member-empty"><Button label="Add Personal Training" icon="pi pi-plus" text @click="renewVisible = true" /></div>
+      <div v-else-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" class="pt-member-empty"><Button label="Add Personal Training" icon="pi pi-plus" text @click="renewVisible = true" /></div>
     </div>
 
     <TabView>
@@ -229,10 +240,10 @@ onMounted(() => {
 
       <TabPanel header="Personal Training">
         <div v-if="memberPersonalTraining.length" class="app-table-wrap"><table class="app-table"><thead><tr><th>PT Plan</th><th>Trainer</th><th>Start Date</th><th>End Date</th><th>Amount</th><th>Balance</th><th>Status</th></tr></thead><tbody><tr v-for="subscription in memberPersonalTraining" :key="subscription.id"><td>{{ subscription.planName }}</td><td>{{ subscription.trainerName }}</td><td>{{ formatDate(subscription.startDate) }}</td><td>{{ formatDate(subscription.endDate) }}</td><td>{{ formatCurrency(subscription.amount) }}</td><td>{{ formatCurrency(subscription.pendingAmount) }}</td><td><StatusBadge :status="subscription.status" /></td></tr></tbody></table></div>
-        <div v-else class="empty-state"><Button label="Add Personal Training" icon="pi pi-plus" @click="renewVisible = true" /></div>
+        <div v-else-if="authStore.can(PERMISSION.MANAGE_MEMBERSHIPS)" class="empty-state"><Button label="Add Personal Training" icon="pi pi-plus" @click="renewVisible = true" /></div>
       </TabPanel>
 
-      <TabPanel header="Payments">
+      <TabPanel v-if="authStore.can(PERMISSION.VIEW_PAYMENTS)" header="Payments">
         <div class="app-table-wrap">
           <table class="app-table">
             <thead>
@@ -256,7 +267,7 @@ onMounted(() => {
                 <td><StatusBadge :status="payment.status" /></td>
                 <td class="table-actions">
                   <Button
-                    v-if="payment.status === 'PARTIAL'"
+                    v-if="payment.status === 'PARTIAL' && authStore.can(PERMISSION.RECORD_PAYMENTS)"
                     icon="pi pi-check-circle"
                     text
                     aria-label="Complete payment"
@@ -270,7 +281,7 @@ onMounted(() => {
         </div>
       </TabPanel>
 
-      <TabPanel header="Messages">
+      <TabPanel v-if="authStore.can(PERMISSION.VIEW_MESSAGES)" header="Messages">
         <div class="member-tab-head">
           <div><h4>Recent Messages</h4><p>Delivery history for this member.</p></div>
           <Button label="Send Message" icon="pi pi-send" @click="messageVisible = true" />

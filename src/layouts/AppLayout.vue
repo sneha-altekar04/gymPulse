@@ -7,6 +7,7 @@ import { useToast } from 'primevue/usetoast';
 import { useUiStore } from '../stores/uiStore';
 import { useAuthStore } from '../stores/authStore';
 import { useGymStore } from '../stores/gymStore';
+import { PERMISSION } from '../constants/permissions';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,28 +32,33 @@ onMounted(async () => {
 const menuGroups = [
   {
     title: 'Overview',
-    items: [{ label: 'Dashboard', icon: 'pi pi-th-large', to: '/dashboard' }]
+    items: [{ label: 'Dashboard', icon: 'pi pi-th-large', to: '/dashboard', permission: PERMISSION.VIEW_DASHBOARD }]
   },
   {
     title: 'Management',
     items: [
-      { label: 'Members', icon: 'pi pi-users', to: '/members' },
-      { label: 'Attendance', icon: 'pi pi-calendar', to: '/attendance' },
-      { label: 'Memberships', icon: 'pi pi-id-card', to: '/memberships' },
-      { label: 'Payments', icon: 'pi pi-credit-card', to: '/payments' },
-      { label: 'Messages', icon: 'pi pi-comments', to: '/messages' },
-      { label: 'Trainers', icon: 'pi pi-briefcase', to: '/trainers' }
+      { label: 'Members', icon: 'pi pi-users', to: '/members', permission: PERMISSION.VIEW_MEMBERS },
+      { label: 'Attendance', icon: 'pi pi-calendar', to: '/attendance', permission: PERMISSION.VIEW_ATTENDANCE },
+      { label: 'Memberships', icon: 'pi pi-id-card', to: '/memberships', permission: PERMISSION.VIEW_MEMBERSHIPS },
+      { label: 'Payments', icon: 'pi pi-credit-card', to: '/payments', permission: PERMISSION.VIEW_PAYMENTS },
+      { label: 'Messages', icon: 'pi pi-comments', to: '/messages', permission: PERMISSION.VIEW_MESSAGES },
+      { label: 'Trainers', icon: 'pi pi-briefcase', to: '/trainers', permission: PERMISSION.MANAGE_TRAINERS },
+      { label: 'PT Plans', icon: 'pi pi-list', to: '/pt-plans', permission: PERMISSION.MANAGE_PLANS }
     ]
   },
   {
     title: 'Analytics',
-    items: [{ label: 'Reports', icon: 'pi pi-chart-line', to: '/reports' }]
+    items: [{ label: 'Reports', icon: 'pi pi-chart-line', to: '/reports', permission: PERMISSION.VIEW_REPORTS }]
   },
   {
     title: 'System',
-    items: [{ label: 'Settings', icon: 'pi pi-cog', to: '/settings' }]
+    items: [{ label: 'Settings', icon: 'pi pi-cog', to: '/settings', permission: PERMISSION.MANAGE_SETTINGS }]
   }
 ];
+
+const visibleMenuGroups = computed(() => menuGroups
+  .map((group) => ({ ...group, items: group.items.filter((item) => authStore.can(item.permission)) }))
+  .filter((group) => group.items.length));
 
 const pageTitle = computed(() => route.meta.title || 'Dashboard');
 
@@ -146,7 +152,7 @@ async function handleLogout() {
       </button>
 
       <nav class="app-sidebar__nav" aria-label="Main navigation">
-        <div v-for="group in menuGroups" :key="group.title" class="menu-group">
+        <div v-for="group in visibleMenuGroups" :key="group.title" class="menu-group">
           <p v-if="!isSidebarCollapsed" class="menu-group__title">{{ group.title }}</p>
           <RouterLink
             v-for="item in group.items"
