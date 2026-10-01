@@ -374,25 +374,27 @@ export const seedDatabase = async (projectId, gymId) => {
     // This separate document deliberately excludes all private operations data.
     const publicProfileRef = doc(db, 'publicGymProfiles', 'k3-oxygen');
     batch.set(publicProfileRef, {
-      name: 'K3 Oxygen',
+      name: 'K3 Oxygen Gym',
       slug: 'k3-oxygen',
-      tagline: 'Your space to move, train and grow.',
-      description: 'A welcoming fitness space for strength, movement, and lasting progress.',
-      city: 'Pune',
+      tagline: 'Stronger. Fitter. Happier.',
+      description: 'A high-energy fitness space in Pen for stronger bodies, healthier routines, and lasting progress.',
+      city: 'Pen',
       state: 'Maharashtra',
       facilities: [
-        { name: 'Strength Training', icon: 'bolt' },
-        { name: 'Cardio', icon: 'heart' },
-        { name: 'Personal Training', icon: 'user' }
+        { name: 'Modern Equipment', icon: 'cog' },
+        { name: 'Fitness Training', icon: 'bolt' },
+        { name: 'Strength & Conditioning', icon: 'chart-line' },
+        { name: 'Personal Training', icon: 'user' },
+        { name: 'Supportive Environment', icon: 'users' }
       ],
       openingHours: {
-        Monday: '6:00 AM - 10:00 PM',
-        Tuesday: '6:00 AM - 10:00 PM',
-        Wednesday: '6:00 AM - 10:00 PM',
-        Thursday: '6:00 AM - 10:00 PM',
-        Friday: '6:00 AM - 10:00 PM',
-        Saturday: '6:00 AM - 10:00 PM',
-        Sunday: '7:00 AM - 1:00 PM'
+        Monday: '6:00 AM - 10:30 PM',
+        Tuesday: '6:00 AM - 10:30 PM',
+        Wednesday: '6:00 AM - 10:30 PM',
+        Thursday: '6:00 AM - 10:30 PM',
+        Friday: '6:00 AM - 10:30 PM',
+        Saturday: '6:00 AM - 10:30 PM',
+        Sunday: '7:00 AM - 11:00 AM'
       },
       publicProfileEnabled: true,
       gymId,

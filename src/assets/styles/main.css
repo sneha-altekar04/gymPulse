@@ -1,36 +1,36 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700&display=swap');
 
 :root {
-  --bg-page: #fafaf8;
-  --bg-sidebar: #101f48;
+  --bg-page: #f5f2ed;
+  --bg-sidebar: #111112;
   --bg-card: #ffffff;
-  --bg-card-soft: #fdfdfc;
-  --text-primary: #1b2440;
-  --text-muted: #667085;
-  --border-soft: #e8e9e4;
-  --primary: #4f6ef7;
-  --primary-strong: #162b55;
-  --accent: #14b8a6;
-  --fitness-accent: #a3e635;
+  --bg-card-soft: #fbf9f6;
+  --text-primary: #1c1b1a;
+  --text-muted: #706b66;
+  --border-soft: #e3ddd5;
+  --primary: #f26a16;
+  --primary-strong: #181819;
+  --accent: #ed168c;
+  --fitness-accent: #ff7a1a;
   --success: #22c55e;
   --warning: #f59e42;
   --danger: #f43f5e;
   --neutral: #64748b;
   --shadow-soft: 0 8px 20px rgba(24, 33, 61, 0.05);
-  --color-blue: #4f6ef7;
-  --color-violet: #8b5cf6;
+  --color-blue: #f26a16;
+  --color-violet: #ed168c;
   --color-coral: #ff6b6b;
-  --color-orange: #f59e42;
+  --color-orange: #f26a16;
   --color-amber: #f6b73c;
   --color-teal: #14b8a6;
   --color-cyan: #38bdf8;
   --color-lime: #a3e635;
   --color-emerald: #22c55e;
   --color-rose: #f43f5e;
-  --tint-blue: #eef2ff;
-  --tint-violet: #f4efff;
+  --tint-blue: #fff0e5;
+  --tint-violet: #fff0f8;
   --tint-coral: #fff1f1;
-  --tint-orange: #fff3e7;
+  --tint-orange: #fff0e5;
   --tint-amber: #fff8e8;
   --tint-teal: #ebfbf8;
   --tint-cyan: #edf9ff;
@@ -45,6 +45,11 @@
   --sidebar-width: 272px;
   --sidebar-collapsed: 92px;
   --header-height: 78px;
+  --primary-color: #f26a16;
+  --primary-color-text: #ffffff;
+  --highlight-bg: #fff0e5;
+  --highlight-text-color: #9b3c08;
+  --focus-ring: 0 0 0 0.2rem rgba(242, 106, 22, 0.22);
 }
 
 * {
@@ -89,8 +94,8 @@ button {
 }
 
 .app-sidebar {
-  background: linear-gradient(180deg, #142b62 0%, #101f48 100%);
-  color: #dce6ff;
+  background: linear-gradient(180deg, #202022 0%, #0d0d0e 100%);
+  color: #f4f1ed;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -113,7 +118,7 @@ button {
   min-height: 52px;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(163, 230, 53, 0.2);
+  border-bottom: 1px solid rgba(242, 106, 22, 0.3);
 }
 
 .app-sidebar__brand-mark {
@@ -124,15 +129,15 @@ button {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.2), rgba(37, 99, 235, 0.35));
+  background: linear-gradient(145deg, #f26a16, #ed168c);
   color: #f8fbff;
   font-weight: 800;
   letter-spacing: 0.02em;
-  box-shadow: inset 0 0 0 1px rgba(163, 230, 53, 0.25);
+  box-shadow: 5px 5px 0 rgba(255, 255, 255, 0.1);
 }
 
 .app-sidebar__brand-mark i {
-  color: var(--fitness-accent);
+  color: #ffffff;
   font-size: 0.74rem;
 }
 
@@ -146,14 +151,14 @@ button {
 .app-sidebar__brand-copy p {
   margin: 3px 0 0;
   font-size: 0.76rem;
-  color: #9fb4ea;
+  color: #a8a3a0;
 }
 
 .app-sidebar__collapse-btn {
   margin: 8px 0 14px auto;
   border: 0;
   background: rgba(255, 255, 255, 0.12);
-  color: #dce6ff;
+  color: #f4f1ed;
   width: 30px;
   height: 30px;
   border-radius: var(--radius-pill);
@@ -177,7 +182,7 @@ button {
   font-size: 0.69rem;
   text-transform: uppercase;
   letter-spacing: 0.11em;
-  color: #8ea7e3;
+  color: #c36a35;
   margin: 0 0 4px;
   padding-left: 10px;
 }
@@ -189,7 +194,7 @@ button {
   min-height: 42px;
   border-radius: 10px;
   padding: 0 10px;
-  color: #dce6ff;
+  color: #e7e3df;
   transition: background-color 180ms ease, color 180ms ease;
 }
 
@@ -202,9 +207,9 @@ button {
 }
 
 .menu-link--active {
-  background: rgba(37, 99, 235, 0.35);
+  background: rgba(242, 106, 22, 0.2);
   color: #ffffff;
-  box-shadow: inset 2px 0 0 var(--fitness-accent);
+  box-shadow: inset 3px 0 0 var(--fitness-accent);
 }
 
 .app-sidebar__footer {
@@ -2189,6 +2194,108 @@ button {
     padding: 0;
   }
 }
+
+/* K3 Oxygen brand treatment for PrimeVue controls. */
+body .p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-secondary):not(.p-button-danger):not(.p-button-success):not(.p-button-warning) {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+body .p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-secondary):not(.p-button-danger):not(.p-button-success):not(.p-button-warning):enabled:hover {
+  border-color: #d9560d;
+  background: #d9560d;
+}
+
+body .p-button.p-button-text,
+body .p-button.p-button-outlined {
+  color: var(--primary);
+}
+
+body .p-inputtext:enabled:focus,
+body .p-dropdown:not(.p-disabled).p-focus,
+body .p-multiselect:not(.p-disabled).p-focus,
+body .p-calendar:not(.p-calendar-disabled).p-focus > .p-inputtext {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.16rem rgba(242, 106, 22, 0.16);
+}
+
+body .p-checkbox.p-highlight .p-checkbox-box,
+body .p-radiobutton .p-radiobutton-box.p-highlight,
+body .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+/* Branded application notifications: shared by login, logout and all workflows. */
+body .p-toast {
+  width: min(390px, calc(100vw - 28px));
+  opacity: 1;
+}
+
+body .p-toast .p-toast-message {
+  --toast-accent: var(--primary);
+  overflow: hidden;
+  border: 1px solid #343436;
+  border-left: 5px solid var(--toast-accent);
+  border-radius: 0;
+  background: #181819;
+  color: #ffffff;
+  box-shadow: 10px 10px 0 rgba(242, 106, 22, 0.18), 0 18px 44px rgba(0, 0, 0, 0.26);
+  backdrop-filter: none;
+}
+
+body .p-toast .p-toast-message-success { --toast-accent: #f26a16; }
+body .p-toast .p-toast-message-info { --toast-accent: #ed168c; }
+body .p-toast .p-toast-message-warn { --toast-accent: #f2a316; }
+body .p-toast .p-toast-message-error { --toast-accent: #ef4355; }
+
+body .p-toast .p-toast-message .p-toast-message-content {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 15px;
+  border: 0;
+}
+
+body .p-toast .p-toast-message .p-toast-message-icon {
+  margin-top: 2px;
+  color: var(--toast-accent);
+  font-size: 1.2rem;
+}
+
+body .p-toast .p-toast-message .p-toast-summary {
+  color: #ffffff;
+  font: 700 0.84rem 'Sora', sans-serif;
+}
+
+body .p-toast .p-toast-message .p-toast-detail {
+  margin-top: 5px;
+  color: #bbb7b3;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+body .p-toast .p-toast-message .p-toast-icon-close {
+  width: 28px;
+  height: 28px;
+  color: #8f8b88;
+}
+
+body .p-toast .p-toast-message .p-toast-icon-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+body .p-message {
+  border-width: 0 0 0 4px;
+  border-radius: 0;
+  background: #fff4eb;
+  color: #71340d;
+}
+
+body .p-message.p-message-success { border-color: #f26a16; }
+body .p-message.p-message-info { border-color: #ed168c; background: #fff0f8; color: #7b2258; }
+body .p-message.p-message-warn { border-color: #f2a316; }
+body .p-message.p-message-error { border-color: #ef4355; background: #fff0f1; color: #8d2630; }
 
 .reports-workspace,
 .report-output,
