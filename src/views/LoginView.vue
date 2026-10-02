@@ -12,7 +12,7 @@ import { useAuthStore } from '../stores/authStore';
 const router = useRouter();
 const toast = useToast();
 const authStore = useAuthStore();
-const form = reactive({ email: 'owner@gympulse.com', password: 'Demo@123' });
+const form = reactive({ email: '', password: '' });
 const errors = reactive({ email: null, password: null });
 const loading = ref(false);
 const serverError = ref(null);
@@ -100,10 +100,6 @@ async function handleLogin() {
           <div v-if="serverError" class="error-message" role="alert"><i class="pi pi-times-circle" /><span><strong>Unable to sign in</strong>{{ serverError }}</span></div>
         </form>
 
-        <div class="demo-credentials">
-          <span class="demo-credentials__icon"><i class="pi pi-key" /></span>
-          <div><strong>Demo access</strong><p>owner@gympulse.com</p><p>Password: Demo@123</p></div>
-        </div>
         <RouterLink class="back-to-site" to="/"><i class="pi pi-arrow-left" /> Back to gym website</RouterLink>
       </div>
     </section>
