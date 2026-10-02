@@ -119,9 +119,7 @@ function validate() {
     errors.mobile = 'Enter a valid 10-digit mobile number.';
   }
 
-  if (!form.email || !form.email.trim()) {
-    errors.email = 'Email is required.';
-  } else if (!/^\S+@\S+\.\S+$/.test(form.email)) {
+  if (!/^\S+@\S+\.\S+$/.test(form.email)) {
     errors.email = 'Enter a valid email address.';
   }
 
@@ -192,7 +190,7 @@ function submitForm() {
           <InputText v-model="form.mobile" :invalid="!!errors.mobile" maxlength="10" />
         </label>
 
-        <label class="app-field app-field--required">
+        <label class="app-field">
           <span>Email</span>
           <InputText v-model="form.email" :invalid="!!errors.email" />
         </label>

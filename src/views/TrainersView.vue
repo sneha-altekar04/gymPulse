@@ -114,7 +114,7 @@ function validate() {
   return Object.keys(errors).length === 0;
 }
 
-function saveTrainer() {
+function saveTrainer() {  
   if (!validate()) {
     return;
   }
@@ -148,7 +148,6 @@ function toggleStatus(trainer) {
         <table class="app-table">
           <thead>
             <tr>
-              <th>Photo</th>
               <th>Name</th>
               <th>Mobile</th>
               <th>Specialization</th>
@@ -159,7 +158,6 @@ function toggleStatus(trainer) {
           </thead>
           <tbody>
             <tr v-for="trainer in trainersWithAssignments" :key="trainer.id">
-              <td><MemberAvatar :name="trainer.fullName" /></td>
               <td>{{ trainer.fullName }}</td>
               <td>{{ trainer.mobile }}</td>
               <td>{{ trainer.specialization }}</td>
@@ -192,11 +190,6 @@ function toggleStatus(trainer) {
     >
       <div class="stack-16">
         <div class="app-form-grid app-form-grid--two">
-          <label class="app-field">
-            <span>Photo</span>
-            <InputText placeholder="Photo URL (optional for mock)" />
-          </label>
-
           <label class="app-field">
             <span>Full Name</span>
             <InputText v-model="form.fullName" :invalid="!!errors.fullName" />

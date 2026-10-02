@@ -11,7 +11,7 @@ const sundayHours = '7:00 AM - 11:00 AM';
 const fallbackProfile = {
   name: 'K3 Oxygen Gym',
   description: 'A high-energy fitness space in Pen for stronger bodies, healthier routines, and lasting progress.',
-  city: 'Pen', state: 'Maharashtra', address: 'Fish Market Rd, Ziral Ali', pincode: '402107',
+  city: 'Pen', state: 'Maharashtra', address: 'Walmiki Niwas, 1st Floor, Pen-Antora Road, Above G. P. Parsik Bank', pincode: '402107',
   googleMapsUrl: mapUrl, phone: '078750 91626',
   heroImageUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1400&q=88',
   facilities: [
@@ -29,7 +29,7 @@ const unavailable = ref(false);
 const displayProfile = computed(() => ({
   ...fallbackProfile,
   ...(profile.value || {}),
-  ...(landingSlug === 'k3-oxygen' ? { name: 'K3 Oxygen Gym', city: 'Pen', state: 'Maharashtra', address: 'Fish Market Rd, Ziral Ali', pincode: '402107', googleMapsUrl: mapUrl } : {})
+  ...(landingSlug === 'k3-oxygen' ? { name: 'K3 Oxygen Gym', city: 'Pen', state: 'Maharashtra', address: 'Walmiki Niwas, 1st Floor, Pen-Antora Road, Above G. P. Parsik Bank', pincode: '402107', googleMapsUrl: mapUrl } : {})
 }));
 const displayFacilities = computed(() => {
   const savedFacilities = profile.value?.facilities;

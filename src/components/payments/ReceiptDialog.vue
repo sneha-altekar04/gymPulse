@@ -42,7 +42,7 @@ function printReceipt() {
       <div class="receipt-head">
         <div>
           <h3>K3 Oxygen Gym</h3>
-          <p>Fish Market Rd, Ziral Ali, Pen, Maharashtra 402107</p>
+          <p>Walmiki Niwas, 1st Floor, Pen-Antora Road, Above G. P. Parsik Bank, Pen, Maharashtra 402107</p>
         </div>
         <div class="receipt-meta">
           <p><strong>Receipt:</strong> {{ receipt.receiptNumber }}</p>
