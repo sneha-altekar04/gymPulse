@@ -8,6 +8,7 @@ import Button from 'primevue/button';
 import { loginUser } from '../firebase/auth';
 import { getDocument } from '../firebase/firestore';
 import { useAuthStore } from '../stores/authStore';
+import k3Logo from '../../designs/k3-oxygen-minimal.png';
 
 const router = useRouter();
 const toast = useToast();
@@ -55,9 +56,9 @@ async function handleLogin() {
 <template>
   <main class="login-page">
     <section class="login-story" aria-label="K3 Oxygen Gym">
-      <RouterLink class="login-story__brand" to="/">
-        <span>K3</span>
-        <div><strong>Oxygen</strong><small>Gym</small></div>
+      <RouterLink class="login-story__brand" to="/" aria-label="K3 Oxygen Gym home">
+        <img class="login-story__brand-logo" :src="k3Logo" alt="" />
+        <span class="login-story__wordmark"><strong><span>K3</span> Oxygen</strong><small>Gym</small></span>
       </RouterLink>
       <div class="login-story__content">
         <p class="login-eyebrow">Gym management · powered by GymPulse</p>
@@ -113,5 +114,7 @@ async function handleLogin() {
 @keyframes login-enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}.login-card{animation:login-enter .32s ease-out}
 @media(max-width:960px){.login-page{grid-template-columns:1fr}.login-story{display:none}.login-access{padding:24px;min-height:100vh}.login-card{max-width:500px}}
 @media(max-width:560px){.login-access{align-items:start;padding:0;background:#fff}.login-card{min-height:100vh;padding:34px 24px;border:0;box-shadow:none}.login-header{margin-top:18px}.login-header h2{font-size:1.75rem}}
+.login-story__brand-logo{display:block;width:64px;height:64px;flex:none;padding:0;background:transparent;object-fit:contain}
+.login-story__brand>.login-story__wordmark{display:flex;width:auto;height:auto;place-items:initial;align-items:baseline;gap:7px;transform:none;background:transparent;box-shadow:none}.login-story__wordmark strong{color:var(--login-orange);font:800 1.32rem 'Sora',sans-serif;letter-spacing:-.04em}.login-story__wordmark strong span{color:#fff}.login-story__wordmark small{color:#aaa;font-size:.66rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
 @media(prefers-reduced-motion:reduce){.login-card{animation:none}}
 </style>

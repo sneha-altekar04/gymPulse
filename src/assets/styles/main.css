@@ -141,17 +141,34 @@ button {
   font-size: 0.74rem;
 }
 
+.app-sidebar__brand-logo {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  object-fit: contain;
+}
+
 .app-sidebar__brand-copy h1 {
   margin: 0;
   font-family: 'Sora', sans-serif;
-  font-size: 1rem;
-  letter-spacing: 0.01em;
+  color: #f26a16;
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.app-sidebar__brand-copy h1 span {
+  color: #ffffff;
 }
 
 .app-sidebar__brand-copy p {
-  margin: 3px 0 0;
-  font-size: 0.76rem;
+  margin: 2px 0 0;
   color: #a8a3a0;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .app-sidebar__collapse-btn {

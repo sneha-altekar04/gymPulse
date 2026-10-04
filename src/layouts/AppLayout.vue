@@ -8,6 +8,7 @@ import { useUiStore } from '../stores/uiStore';
 import { useAuthStore } from '../stores/authStore';
 import { useGymStore } from '../stores/gymStore';
 import { PERMISSION } from '../constants/permissions';
+import k3Logo from '../../designs/k3-oxygen-minimal.png';
 
 const route = useRoute();
 const router = useRouter();
@@ -133,13 +134,10 @@ async function handleLogout() {
       }"
     >
       <div class="app-sidebar__brand">
-        <div class="app-sidebar__brand-mark" aria-hidden="true">
-          <i class="pi pi-bolt" />
-          <span>GP</span>
-        </div>
+        <img class="app-sidebar__brand-logo" :src="k3Logo" alt="K3 Oxygen Gym" />
         <div v-if="!isSidebarCollapsed" class="app-sidebar__brand-copy">
-          <h1>K3 Oxygen</h1>
-          <p>{{ userProfile?.gymName || 'My Gym' }}</p>
+          <h1><span>K3</span> Oxygen</h1>
+          <p>Gym</p>
         </div>
       </div>
 

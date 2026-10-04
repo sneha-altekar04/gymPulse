@@ -2,9 +2,11 @@
 import { computed, onMounted, ref } from 'vue';
 import { getPublicGymProfile } from '../services/firebase/publicGymProfileService';
 import techwiseLogo from '../../designs/techwise-logo/techwise-solutions-logo-dark.png';
+import k3Logo from '../../designs/k3-oxygen-minimal.png';
 
 const landingSlug = import.meta.env.VITE_PUBLIC_GYM_SLUG || 'k3-oxygen';
 const mapUrl = 'https://maps.app.goo.gl/xikDBB1QFbUtALFh8';
+const whatsappUrl = 'https://wa.me/917875091626';
 const weekdayHours = '6:00 AM - 10:30 PM';
 const sundayHours = '7:00 AM - 11:00 AM';
 
@@ -61,7 +63,10 @@ onMounted(loadProfile);
     <article v-else class="gym-profile">
       <header class="gym-profile__hero">
         <nav class="profile-container hero-nav" aria-label="Public gym navigation">
-          <a class="public-brand" href="#top" aria-label="K3 Oxygen Gym home"><span class="public-brand__mark">K3</span><span><strong>Oxygen</strong><small>Gym</small></span></a>
+          <a class="public-brand" href="#top" aria-label="K3 Oxygen Gym home">
+            <img class="public-brand__logo" :src="k3Logo" alt="" />
+            <span class="public-brand__wordmark"><strong><span>K3</span> Oxygen</strong><small>Gym</small></span>
+          </a>
           <div class="hero-nav__actions"><a :href="`tel:${displayProfile.phone}`"><i class="pi pi-phone" /> {{ displayProfile.phone }}</a><RouterLink class="profile-login" to="/login"><i class="pi pi-sign-in" /> Staff login</RouterLink></div>
         </nav>
 
@@ -111,7 +116,10 @@ onMounted(loadProfile);
 
       <footer id="site-footer" class="profile-footer">
         <div class="profile-footer__main">
-          <div class="public-brand"><span class="public-brand__mark">K3</span><span><strong>Oxygen</strong><small>Gym</small></span></div>
+          <div class="public-brand">
+            <img class="public-brand__logo" :src="k3Logo" alt="" />
+            <span class="public-brand__wordmark"><strong><span>K3</span> Oxygen</strong><small>Gym</small></span>
+          </div>
           <div class="profile-footer__location"><strong>{{ displayProfile.address }}, {{ displayProfile.city }} {{ displayProfile.pincode }}</strong><span>Monday–Saturday {{ weekdayHours }} · Sunday {{ sundayHours }}</span></div>
           <div class="developer-credit">
             <span class="developer-credit__label">Developed by</span>
@@ -126,6 +134,17 @@ onMounted(loadProfile);
         </div>
         <small class="profile-footer__copyright">&copy; {{ new Date().getFullYear() }} {{ displayProfile.name }} <em>Powered by GymPulse</em></small>
       </footer>
+
+      <a
+        class="floating-whatsapp"
+        :href="whatsappUrl"
+        target="_blank"
+        rel="noopener"
+        aria-label="Chat with K3 Oxygen Gym on WhatsApp"
+        title="Chat with us on WhatsApp"
+      >
+        <i class="pi pi-whatsapp" aria-hidden="true" />
+      </a>
     </article>
   </main>
 </template>
@@ -142,5 +161,10 @@ onMounted(loadProfile);
 @media(max-width:1050px){.profile-footer__main{grid-template-columns:auto 1fr}.developer-credit{grid-column:1/-1}.developer-credit__content{width:100%}.developer-credit__contacts{display:flex;flex-wrap:wrap;gap:8px 18px}}
 @media(max-width:850px){.profile-footer__main{grid-template-columns:1fr}.developer-credit{justify-items:center}.developer-credit__content{width:auto;justify-content:center}.developer-credit__contacts{justify-content:center;text-align:left}}
 @media(max-width:560px){.developer-credit__content{display:grid;justify-items:center}.developer-credit__contacts{display:grid;justify-items:center;text-align:center}}
+.public-brand__logo{display:block;width:46px;height:46px;flex:none;padding:0;background:transparent;object-fit:contain}.profile-footer .public-brand__logo{width:42px;height:42px}
+.public-brand__wordmark{display:flex;align-items:baseline;gap:6px}.public-brand__wordmark strong{color:var(--orange);font:800 1.08rem 'Sora',sans-serif;letter-spacing:-.035em}.public-brand__wordmark strong span{color:#fff}.public-brand__wordmark small{color:#aaa;font-size:.62rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+@media(max-width:620px){.public-brand__logo{width:40px;height:40px}.public-brand__wordmark strong{font-size:.94rem}.public-brand__wordmark small{font-size:.56rem}.profile-footer .public-brand__logo{width:40px;height:40px}}
+.floating-whatsapp{position:fixed;z-index:50;right:max(22px,calc((100vw - 1280px)/2));bottom:24px;display:grid;place-items:center;width:58px;height:58px;border:2px solid rgba(255,255,255,.9);border-radius:50%;background:#25d366;color:#fff;font-size:1.75rem;box-shadow:0 12px 30px rgba(0,0,0,.28);transition:transform 180ms ease,box-shadow 180ms ease}.floating-whatsapp:hover{transform:translateY(-4px) scale(1.04);box-shadow:0 16px 36px rgba(0,0,0,.34)}.floating-whatsapp:focus-visible{outline:3px solid var(--orange);outline-offset:4px}
+@media(max-width:620px){.floating-whatsapp{right:16px;bottom:16px;width:54px;height:54px;font-size:1.6rem}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
